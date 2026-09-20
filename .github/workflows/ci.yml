@@ -43,6 +43,26 @@ jobs:
       - name: Validate observability IaC
         run: bash deploy/observability/scripts/validate-iac.sh
 
+  k8s-iac-validation:
+    name: Kubernetes IaC Validation
+    runs-on: ubuntu-latest
+    env:
+      AWS_EC2_METADATA_DISABLED: "true"
+      TF_IN_AUTOMATION: "true"
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Set up Terraform
+        uses: hashicorp/setup-terraform@v4
+        with:
+          terraform_version: 1.15.8
+          terraform_wrapper: false
+
+      - name: Validate Kubernetes IaC
+        run: bash deploy/k8s/scripts/validate-iac.sh
+
   backend-build-test:
     name: Backend Build & Test (Unit + Integration)
     runs-on: ubuntu-latest
