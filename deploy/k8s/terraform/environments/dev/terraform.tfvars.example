@@ -1,4 +1,56 @@
 # 이 파일을 terraform.tfvars로 복사해 사용한다. 실제 tfvars는 커밋하지 않는다.
-# 노드 구성에 필요한 변수는 후속 PR에서 추가된다.
 
 aws_region = "us-east-1"
+
+# beach-vpc (10.0.0.0/16). Pod CIDR 10.244.0.0/16과 겹치지 않는다.
+vpc_id = "vpc-0123456789abcdef0"
+
+# Ubuntu Server 24.04 LTS, x86_64. 리전별로 다르므로 실행 시점에 확인한다.
+ami_id = "ami-0123456789abcdef0"
+
+# Kubernetes API(6443) 인바운드는 기본적으로 열지 않는다. 로컬 kubectl은 SSM 포트 포워딩을 쓴다.
+#
+#   aws ssm start-session --target <control-plane instance id> \
+#     --document-name AWS-StartPortForwardingSession \
+#     --parameters '{"portNumber":["6443"],"localPortNumber":["6443"]}'
+#
+# 이 방식은 kubeconfig의 server 주소가 https://127.0.0.1:6443으로 고정되므로
+# 클러스터를 재생성해도 수정할 필요가 없다.
+#
+# 직접 접속이 꼭 필요하면 tfvars를 고치지 말고 실행 시점에 현재 IP를 주입한다.
+#
+#   terraform apply -var="operator_cidr=$(curl -s https://checkip.amazonaws.com)/32"
+operator_cidr = null
+
+# subnet_id는 퍼블릭 서브넷이어야 한다. 프라이빗 서브넷에는 NAT가 없어
+# SSM 접속과 패키지 설치가 모두 막힌다.
+#   public-a: 10.0.1.0/24 (us-east-1a) — 기존 앱 서버가 있는 AZ
+#   public-b: 10.0.2.0/24 (us-east-1b) — 기존 관측 서버가 있는 AZ
+# App Worker 2대는 서로 다른 AZ에 배치해 노드 장애와 AZ 장애 영역을 함께 분리한다.
+# 관측 노드는 기존 관측 서버와 같은 public-b에 두어 앱과 장애 영역을 나눈다.
+nodes = {
+  cp-1 = {
+    role                = "control-plane"
+    subnet_id           = "subnet-0123456789abcdef0" # public-a
+    instance_type       = "t3.medium"
+    root_volume_size_gb = 30
+  }
+  app-1 = {
+    role                = "app"
+    subnet_id           = "subnet-0123456789abcdef0" # public-a
+    instance_type       = "t3.small"
+    root_volume_size_gb = 30
+  }
+  app-2 = {
+    role                = "app"
+    subnet_id           = "subnet-abcdef0123456789a" # public-b
+    instance_type       = "t3.small"
+    root_volume_size_gb = 30
+  }
+  obs-1 = {
+    role                = "observability"
+    subnet_id           = "subnet-abcdef0123456789a" # public-b
+    instance_type       = "t3.medium"
+    root_volume_size_gb = 30
+  }
+}
