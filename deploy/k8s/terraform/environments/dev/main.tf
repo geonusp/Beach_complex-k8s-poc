@@ -118,6 +118,7 @@ module "node" {
   subnet_id            = each.value.subnet_id
   ami_id               = var.ami_id
   instance_type        = each.value.instance_type
+  kubernetes_version   = var.kubernetes_version
   root_volume_size_gb  = each.value.root_volume_size_gb
   iam_instance_profile = aws_iam_instance_profile.node.name
 

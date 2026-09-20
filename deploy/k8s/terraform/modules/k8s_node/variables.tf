@@ -43,6 +43,16 @@ variable "root_volume_size_gb" {
   type        = number
 }
 
+variable "kubernetes_version" {
+  description = "Kubernetes minor version used for the pkgs.k8s.io apt repository, for example v1.36."
+  type        = string
+
+  validation {
+    condition     = can(regex("^v1\\.[0-9]+$", var.kubernetes_version))
+    error_message = "kubernetes_version must look like v1.36."
+  }
+}
+
 variable "security_group_ids" {
   description = "Security groups attached to the node."
   type        = list(string)

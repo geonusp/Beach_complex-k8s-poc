@@ -52,6 +52,16 @@ variable "operator_cidr" {
   }
 }
 
+variable "kubernetes_version" {
+  description = "Kubernetes minor version installed on every node."
+  type        = string
+
+  validation {
+    condition     = can(regex("^v1\\.[0-9]+$", var.kubernetes_version))
+    error_message = "kubernetes_version must look like v1.36."
+  }
+}
+
 variable "nodes" {
   description = "Cluster nodes keyed by short name."
 
