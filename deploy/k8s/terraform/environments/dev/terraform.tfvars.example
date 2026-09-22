@@ -5,6 +5,10 @@ aws_region = "us-east-1"
 # beach-vpc (10.0.0.0/16). Pod CIDR 10.244.0.0/16과 겹치지 않는다.
 vpc_id = "vpc-0123456789abcdef0"
 
+# Cilium v1.20.2가 e2e 테스트하는 최신 Kubernetes는 1.36이다. 1.37은 목록에 없다.
+# 버전을 올릴 때는 Cilium 호환성 표를 먼저 확인한다.
+kubernetes_version = "v1.36"
+
 # Ubuntu Server 24.04 LTS, x86_64. 리전별로 다르므로 실행 시점에 확인한다.
 ami_id = "ami-0123456789abcdef0"
 
