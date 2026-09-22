@@ -12,3 +12,8 @@ output "public_ip" {
   description = "EC2 public IPv4 address."
   value       = aws_instance.this.public_ip
 }
+
+output "hostname" {
+  description = "Hostname assigned by cloud-init. kubeadm uses this as the node name."
+  value       = local.node_hostname
+}
