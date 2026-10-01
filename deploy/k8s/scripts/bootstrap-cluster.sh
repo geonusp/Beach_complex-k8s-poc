@@ -12,7 +12,17 @@ readonly script_dir="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 source "$script_dir/lib/ssm.sh"
 
 main() {
-  require_tools
+  require_tools python3
+
+  local node_data expected_node_count expected_nodes
+  node_data="$(terraform_output_json node_hostnames | python3 -c '
+import json, sys
+hostnames = json.load(sys.stdin)
+print(len(hostnames))
+print(" ".join(f"node/{hostname}" for hostname in hostnames.values()))
+')"
+  expected_node_count="${node_data%%$'\n'*}"
+  expected_nodes="${node_data#*$'\n'}"
 
   log "step 1/4 control plane"
   bash "$script_dir/init-control-plane.sh"
@@ -27,13 +37,21 @@ main() {
   bash "$script_dir/label-nodes.sh"
 
   log "verifying cluster"
-  ssm_run "$(terraform_output control_plane_instance_id)" '
+  ssm_run "$(terraform_output control_plane_instance_id)" "
 set -Eeuo pipefail
 export KUBECONFIG=/root/.kube/config
+kubectl wait --for=condition=Ready $expected_nodes --timeout=300s
+actual_node_count=\"\$(kubectl get nodes --no-headers | wc -l)\"
+if [ \"\$actual_node_count\" -ne '$expected_node_count' ]; then
+  echo \"expected $expected_node_count nodes, found \$actual_node_count\" >&2
+  exit 1
+fi
 kubectl get nodes -o wide
+kubectl -n kube-system rollout status daemonset/cilium --timeout=300s
 kubectl -n kube-system get pods -l k8s-app=cilium
+kubectl -n kube-system rollout status deployment/coredns --timeout=300s
 kubectl -n kube-system get pods -l k8s-app=kube-dns
-'
+"
 
   log "bootstrap completed"
 }

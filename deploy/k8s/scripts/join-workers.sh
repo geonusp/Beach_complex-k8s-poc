@@ -4,7 +4,7 @@ set -Eeuo pipefail
 source "$(dirname "${BASH_SOURCE[0]}")/lib/ssm.sh"
 
 main() {
-  require_tools
+  require_tools python3
 
   local control_plane_id join_command
   control_plane_id="$(terraform_output control_plane_instance_id)"

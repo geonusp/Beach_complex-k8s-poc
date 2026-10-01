@@ -1,8 +1,10 @@
 # SSM Run Command로 원격 셸 스크립트를 실행하는 공통 함수.
 # 이 파일은 단독 실행하지 않고 다른 스크립트에서 source 한다.
 
-readonly repo_root="$(cd "$(dirname "${BASH_SOURCE[0]}")/../../.." && pwd)"
+readonly repo_root="$(cd "$(dirname "${BASH_SOURCE[0]}")/../../../.." && pwd)"
 readonly terraform_environment="$repo_root/deploy/k8s/terraform/environments/dev"
+readonly ssm_poll_interval_seconds="${SSM_POLL_INTERVAL_SECONDS:-5}"
+readonly ssm_command_timeout_seconds="${SSM_COMMAND_TIMEOUT_SECONDS:-900}"
 
 log() {
   printf '[beach-k8s] %s\n' "$*"
@@ -15,7 +17,7 @@ fail() {
 
 require_tools() {
   local tool
-  for tool in aws terraform base64; do
+  for tool in aws terraform base64 "$@"; do
     command -v "$tool" >/dev/null || fail "$tool is required but not installed"
   done
 }
@@ -39,7 +41,7 @@ terraform_output_json() {
 ssm_run() {
   local instance_id="$1"
   local script="$2"
-  local encoded command_id status
+  local encoded command_id status deadline
 
   encoded="$(printf '%s' "$script" | base64 -w0)"
 
@@ -51,26 +53,39 @@ ssm_run() {
     --query 'Command.CommandId' \
     --output text)" || fail "failed to send SSM command to $instance_id"
 
-  # 명령이 실패해도 wait는 비정상 종료하므로, 상태는 아래에서 직접 확인한다.
-  aws ssm wait command-executed \
-    --command-id "$command_id" \
-    --instance-id "$instance_id" >/dev/null 2>&1 || true
+  deadline=$((SECONDS + ssm_command_timeout_seconds))
+  while true; do
+    if ! status="$(aws ssm get-command-invocation \
+      --command-id "$command_id" \
+      --instance-id "$instance_id" \
+      --query 'Status' --output text 2>/dev/null)"; then
+      # Run Command invocation은 eventual consistency 때문에 전송 직후 보이지 않을 수 있다.
+      status="Pending"
+    fi
 
-  status="$(aws ssm get-command-invocation \
-    --command-id "$command_id" \
-    --instance-id "$instance_id" \
-    --query 'Status' --output text)"
+    case "$status" in
+      Success)
+        break
+        ;;
+      Pending|InProgress|Delayed)
+        if ((SECONDS >= deadline)); then
+          fail "SSM command on $instance_id did not finish within ${ssm_command_timeout_seconds}s"
+        fi
+        sleep "$ssm_poll_interval_seconds"
+        ;;
+      *)
+        aws ssm get-command-invocation \
+          --command-id "$command_id" \
+          --instance-id "$instance_id" \
+          --query 'StandardErrorContent' --output text >&2 || true
+        fail "SSM command on $instance_id finished with status $status"
+        ;;
+    esac
+  done
 
   aws ssm get-command-invocation \
     --command-id "$command_id" \
     --instance-id "$instance_id" \
     --query 'StandardOutputContent' --output text
 
-  if [[ "$status" != "Success" ]]; then
-    aws ssm get-command-invocation \
-      --command-id "$command_id" \
-      --instance-id "$instance_id" \
-      --query 'StandardErrorContent' --output text >&2
-    fail "SSM command on $instance_id finished with status $status"
-  fi
 }

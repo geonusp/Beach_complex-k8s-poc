@@ -20,11 +20,6 @@ main() {
 set -Eeuo pipefail
 export KUBECONFIG=/root/.kube/config
 
-if kubectl -n kube-system get daemonset cilium >/dev/null 2>&1; then
-  echo 'cilium is already installed, skipping'
-  exit 0
-fi
-
 if ! command -v helm >/dev/null 2>&1; then
   curl -fsSL https://raw.githubusercontent.com/helm/helm/main/scripts/get-helm-3 | bash
 fi
@@ -33,7 +28,7 @@ echo '$values_encoded' | base64 -d > /tmp/cilium-values.yaml
 
 helm repo add cilium https://helm.cilium.io/ --force-update
 helm repo update
-helm install cilium cilium/cilium \
+helm upgrade --install cilium cilium/cilium \
   --version '$cilium_version' \
   --namespace kube-system \
   --values /tmp/cilium-values.yaml
