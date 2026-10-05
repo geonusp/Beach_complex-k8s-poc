@@ -26,9 +26,8 @@ spring:
     redis:
       repositories:
         enabled: false
-  redis:
-    host: ${SPRING_REDIS_HOST:localhost}
-    port: ${SPRING_REDIS_PORT:6379}
+      host: ${SPRING_DATA_REDIS_HOST:${SPRING_REDIS_HOST:localhost}}
+      port: ${SPRING_DATA_REDIS_PORT:${SPRING_REDIS_PORT:6379}}
   jackson:
     serialization:
       write-dates-as-timestamps: false

@@ -449,6 +449,8 @@ test_beach_deployment_creates_runtime_secret_and_rolls_out() {
 
   grep -Fq 'APP_FIREBASE_ENABLED: "false"' "$repo_root/deploy/k8s/app/configmap.yaml" \
     || fail 'Beach ConfigMap does not disable Firebase for the credential-free PoC'
+  grep -Fq -- '--from-literal=SPRING_DATA_REDIS_HOST=redis' "$repo_root/deploy/k8s/scripts/deploy-beach.sh" \
+    || fail 'Beach deployment does not inject the Spring Boot 3 Redis host property'
 
   write_fake_tools "$bin_dir"
   cat > "$bin_dir/kubectl" <<'EOF'
