@@ -9,9 +9,6 @@ vpc_id = "vpc-0123456789abcdef0"
 # 버전을 올릴 때는 Cilium 호환성 표를 먼저 확인한다.
 kubernetes_version = "v1.36"
 
-# Ubuntu Server 24.04 LTS, x86_64. 리전별로 다르므로 실행 시점에 확인한다.
-ami_id = "ami-0123456789abcdef0"
-
 # Kubernetes API(6443) 인바운드는 기본적으로 열지 않는다. 로컬 kubectl은 SSM 포트 포워딩을 쓴다.
 #
 #   aws ssm start-session --target <control-plane instance id> \
