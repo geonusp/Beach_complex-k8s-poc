@@ -3,8 +3,12 @@ set -Eeuo pipefail
 
 source "$(dirname "${BASH_SOURCE[0]}")/lib/ssm.sh"
 
+readonly deploy_timeout_seconds="${BEACH_DEPLOY_TIMEOUT_SECONDS:-180}"
+
 main() {
   require_tools
+  [[ "$deploy_timeout_seconds" =~ ^[1-9][0-9]*$ ]] \
+    || fail 'BEACH_DEPLOY_TIMEOUT_SECONDS must be a positive integer'
 
   local control_plane_id manifest_dir encoded_kustomization encoded_namespace encoded_configmap encoded_deployment encoded_service encoded_ingress
   control_plane_id="$(terraform_output control_plane_instance_id)"
@@ -16,7 +20,7 @@ main() {
   encoded_service="$(base64 -w0 "$repo_root/deploy/k8s/app/service.yaml")"
   encoded_ingress="$(base64 -w0 "$repo_root/deploy/k8s/app/ingress.yaml")"
 
-  log "deploying Beach on $control_plane_id"
+  log "deploying Beach on $control_plane_id (rollout timeout: ${deploy_timeout_seconds}s)"
   ssm_run "$control_plane_id" "
 set -Eeuo pipefail
 export KUBECONFIG=/root/.kube/config
@@ -38,7 +42,7 @@ kubectl create secret generic beach-runtime \\
   --from-literal=JWT_SECRET=\"\$jwt_secret\" \\
   --dry-run=client -o yaml | kubectl apply -f -
 kubectl apply -k '$manifest_dir'
-kubectl -n beach rollout status deployment/beach --timeout=300s
+kubectl -n beach rollout status deployment/beach --timeout='${deploy_timeout_seconds}s'
 kubectl -n beach get pods -o wide
 unset jwt_secret
 "

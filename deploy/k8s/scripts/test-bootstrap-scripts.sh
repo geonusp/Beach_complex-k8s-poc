@@ -460,7 +460,7 @@ EOF
     || fail 'Beach runtime Secret was not generated'
   grep -Fq -- 'apply -k /tmp/beach-app' "$kubectl_log" \
     || fail 'Beach manifests were not applied with kustomize'
-  grep -Fxq -- '-n beach rollout status deployment/beach --timeout=300s' "$kubectl_log" \
+  grep -Fxq -- '-n beach rollout status deployment/beach --timeout=180s' "$kubectl_log" \
     || fail 'Beach deployment rollout was not verified'
 }
 
