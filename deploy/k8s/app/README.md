@@ -8,12 +8,22 @@
 kubectl apply -k deploy/k8s/app
 ```
 
-`secret.example.yaml`을 복사해 실제 Secret을 만든 뒤 적용한다. 실제 Secret 파일은 저장소에 넣지 않는다.
+Namespace를 먼저 만든 뒤 runtime Secret과 private GHCR pull Secret을 만들고 애플리케이션을 적용한다.
+실제 Secret 파일과 토큰은 저장소에 넣지 않는다.
 
 ```bash
+kubectl apply -f deploy/k8s/app/namespace.yaml
 kubectl apply -f deploy/k8s/app/secret.yaml
+kubectl -n beach create secret docker-registry ghcr-pull \
+  --docker-server=ghcr.io \
+  --docker-username="$GHCR_USERNAME" \
+  --docker-password="$GHCR_TOKEN" \
+  --dry-run=client -o yaml | kubectl apply -f -
 kubectl apply -k deploy/k8s/app
 ```
+
+GHCR 패키지는 기본 private으로 취급한다. public 패키지를 선택하더라도 `ghcr-pull` Secret을
+생성하는 절차를 유지하면 공개 범위 변경이 Deployment 매니페스트에 영향을 주지 않는다.
 
 배포할 이미지 태그를 SHA로 고정하려면 적용 전에 Kustomize image를 변경한다.
 
@@ -43,3 +53,5 @@ helm upgrade --install ingress-nginx ingress-nginx/ingress-nginx \
 ```
 
 외부 DNS를 연결하기 전에는 `kubectl port-forward` 또는 SSM 포트 포워딩으로 Ingress Controller를 검증한다.
+외부 검증 경로는 management 포트의 `/actuator/health`가 아니라 애플리케이션 공개 API인
+`/api/beaches`를 사용한다. management 포트는 Pod probe와 내부 검증용으로만 사용한다.

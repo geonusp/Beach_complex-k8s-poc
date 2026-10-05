@@ -20,6 +20,8 @@ spec:
         app.kubernetes.io/component: backend
         app.kubernetes.io/part-of: beach-complex
     spec:
+      imagePullSecrets:
+        - name: ghcr-pull
       nodeSelector:
         node-role: app
       topologySpreadConstraints:

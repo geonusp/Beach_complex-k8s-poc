@@ -165,10 +165,12 @@ kubectl get nodes -L node-role                          # nodeSelector용 라벨
 Kustomize 매니페스트를 적용한다.
 
 ```bash
+kubectl apply -f deploy/k8s/app/namespace.yaml
 kubectl apply -f deploy/k8s/app/secret.yaml
+kubectl -n beach create secret docker-registry ghcr-pull --docker-server=ghcr.io --docker-username="$GHCR_USERNAME" --docker-password="$GHCR_TOKEN" --dry-run=client -o yaml | kubectl apply -f -
 kustomize edit set image beach-backend=ghcr.io/geonusp/beach_complex-k8s-poc-backend:<IMAGE_SHA>
 kubectl apply -k deploy/k8s/app
-bash deploy/k8s/scripts/verify-beach.sh
+BEACH_URL=https://beach.example.com BEACH_EXTERNAL_PATH=/api/beaches bash deploy/k8s/scripts/verify-beach.sh
 ```
 
 검증 기준:
@@ -177,7 +179,7 @@ bash deploy/k8s/scripts/verify-beach.sh
 - 두 Pod가 서로 다른 `node-role=app` Worker에 배치된다.
 - Service endpoint가 Ready Pod 2개를 가리킨다.
 - `Ingress`가 `nginx` IngressClass로 생성된다.
-- `BEACH_URL`을 지정하면 외부 `/actuator/health` 요청도 성공한다.
+- `BEACH_URL`을 지정하면 외부 `/api/beaches` 요청도 성공한다. `/actuator/health`는 management 포트의 내부 probe로만 확인한다.
 
 검증 후에는 반드시 `terraform destroy`를 실행한다.
 

@@ -4,6 +4,7 @@ set -Eeuo pipefail
 readonly namespace="${BEACH_NAMESPACE:-beach}"
 readonly deployment="${BEACH_DEPLOYMENT:-beach}"
 readonly selector="app.kubernetes.io/name=beach,app.kubernetes.io/component=backend"
+readonly external_path="${BEACH_EXTERNAL_PATH:-/api/beaches}"
 
 log() {
   printf '[beach-k8s] %s\n' "$*"
@@ -39,7 +40,7 @@ main() {
     || fail "ingress/$deployment does not exist"
 
   if [[ -n "${BEACH_URL:-}" ]]; then
-    curl --fail --silent --show-error --max-time 10 "$BEACH_URL/actuator/health" >/dev/null \
+    curl --fail --silent --show-error --max-time 10 "$BEACH_URL$external_path" >/dev/null \
       || fail "external health check failed: $BEACH_URL"
   fi
 
