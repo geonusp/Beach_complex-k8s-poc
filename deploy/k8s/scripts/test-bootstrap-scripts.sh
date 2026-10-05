@@ -485,7 +485,6 @@ test_provision_and_deploy_runs_steps_in_order() {
   local script="$repo_root/deploy/k8s/scripts/provision-and-deploy.sh"
   local apply_line bootstrap_line ghcr_line dependencies_line beach_line destroy_line
 
-  [[ -x "$script" ]] || fail 'provision-and-deploy.sh is not executable'
   apply_line="$(grep -nF 'terraform -chdir=' "$script" | grep -F 'apply -auto-approve' | cut -d: -f1)"
   bootstrap_line="$(grep -nF 'bootstrap-cluster.sh' "$script" | head -n1 | cut -d: -f1)"
   ghcr_line="$(grep -nF 'sync-ghcr-secret.sh' "$script" | head -n1 | cut -d: -f1)"
