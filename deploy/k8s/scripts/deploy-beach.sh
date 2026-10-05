@@ -38,10 +38,11 @@ kubectl create secret generic beach-runtime \\
   --from-literal=SPRING_DATASOURCE_URL=jdbc:postgresql://postgres:5432/beach_complex \\
   --from-literal=SPRING_DATASOURCE_USERNAME=beach \\
   --from-literal=SPRING_DATASOURCE_PASSWORD=beach \\
-  --from-literal=SPRING_REDIS_HOST=redis \\
+  --from-literal=SPRING_DATA_REDIS_HOST=redis \\
   --from-literal=JWT_SECRET=\"\$jwt_secret\" \\
   --dry-run=client -o yaml | kubectl apply -f -
 kubectl apply -k '$manifest_dir'
+kubectl -n beach rollout restart deployment/beach
 kubectl -n beach rollout status deployment/beach --timeout='${deploy_timeout_seconds}s'
 kubectl -n beach get pods -o wide
 unset jwt_secret

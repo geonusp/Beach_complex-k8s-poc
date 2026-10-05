@@ -447,6 +447,11 @@ test_beach_deployment_creates_runtime_secret_and_rolls_out() {
   local remote_script="$test_dir/beach-deploy-remote.sh"
   local kubectl_log="$test_dir/kubectl-beach-deploy.log"
 
+  grep -Fq 'APP_FIREBASE_ENABLED: "false"' "$repo_root/deploy/k8s/app/configmap.yaml" \
+    || fail 'Beach ConfigMap does not disable Firebase for the credential-free PoC'
+  grep -Fq -- '--from-literal=SPRING_DATA_REDIS_HOST=redis' "$repo_root/deploy/k8s/scripts/deploy-beach.sh" \
+    || fail 'Beach deployment does not inject the Spring Boot 3 Redis host property'
+
   write_fake_tools "$bin_dir"
   cat > "$bin_dir/kubectl" <<'EOF'
 #!/usr/bin/env bash
@@ -463,6 +468,8 @@ EOF
     || fail 'Beach runtime Secret was not generated'
   grep -Fq -- 'apply -k /tmp/beach-app' "$kubectl_log" \
     || fail 'Beach manifests were not applied with kustomize'
+  grep -Fxq -- '-n beach rollout restart deployment/beach' "$kubectl_log" \
+    || fail 'Beach deployment was not restarted after applying runtime manifests'
   grep -Fxq -- '-n beach rollout status deployment/beach --timeout=180s' "$kubectl_log" \
     || fail 'Beach deployment rollout was not verified'
 }
