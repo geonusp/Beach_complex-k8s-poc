@@ -5,6 +5,8 @@ locals {
   api_security_group_ids = aws_security_group.control_plane_api[*].id
 }
 
+data "aws_caller_identity" "current" {}
+
 # 클러스터 노드가 공유하는 Security Group.
 # 노드 사이 통신은 self 참조로 전부 허용한다. kubeadm이 요구하는 포트(6443, 2379-2380,
 # 10250, 10256, 10257, 10259, 30000-32767)에 더해 Cilium의 VXLAN 8472/UDP와 health 4240,
@@ -94,6 +96,20 @@ resource "aws_iam_role" "node" {
 resource "aws_iam_role_policy_attachment" "node_ssm" {
   role       = aws_iam_role.node.name
   policy_arn = "arn:aws:iam::aws:policy/AmazonSSMManagedInstanceCore"
+}
+
+resource "aws_iam_role_policy" "node_ghcr_parameter_read" {
+  name = "${local.name_prefix}-ghcr-parameter-read"
+  role = aws_iam_role.node.id
+
+  policy = jsonencode({
+    Version = "2012-10-17"
+    Statement = [{
+      Effect   = "Allow"
+      Action   = ["ssm:GetParameter"]
+      Resource = "arn:aws:ssm:${var.aws_region}:${data.aws_caller_identity.current.account_id}:parameter${var.ghcr_token_parameter_name}"
+    }]
+  })
 }
 
 resource "aws_iam_instance_profile" "node" {

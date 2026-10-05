@@ -48,6 +48,9 @@ EOF
 set -Eeuo pipefail
 
 case "$1 $2" in
+  'ssm get-parameter')
+    printf 'test-ghcr-token\n'
+    ;;
   'ssm send-command')
     while (($#)); do
       if [[ "$1" == '--parameters' ]]; then
@@ -362,6 +365,35 @@ test_python_is_checked_before_worker_join() {
     || fail 'join-workers.sh did not report the missing python3 dependency'
 }
 
+test_ghcr_secret_is_rehydrated_from_ssm() {
+  local bin_dir="$test_dir/ghcr-bin"
+  local parameters_file="$test_dir/ghcr-parameters"
+  local remote_script="$test_dir/ghcr-remote.sh"
+  local kubectl_log="$test_dir/kubectl-ghcr.log"
+
+  write_fake_tools "$bin_dir"
+  cat > "$bin_dir/kubectl" <<'EOF'
+#!/usr/bin/env bash
+printf '%s\n' "$*" >> "$KUBECTL_LOG"
+EOF
+  chmod +x "$bin_dir/kubectl"
+
+  PATH="$bin_dir:$PATH" AWS_PARAMETERS_FILE="$parameters_file" \
+    GHCR_USERNAME=geonusp GHCR_TOKEN_PARAMETER_NAME=/beach/dev/ghcr/token \
+    bash "$script_dir/sync-ghcr-secret.sh" >/dev/null
+  decode_remote_script "$parameters_file" "$remote_script"
+  PATH="$bin_dir:$PATH" KUBECTL_LOG="$kubectl_log" bash "$remote_script"
+
+  ! grep -Fq 'test-ghcr-token' "$parameters_file" \
+    || fail 'GHCR token was embedded in the SSM command payload'
+  grep -Fxq 'get namespace beach' "$kubectl_log" \
+    || fail 'sync script did not check the target namespace'
+  grep -Fxq 'create secret docker-registry ghcr-pull --namespace beach --docker-server=ghcr.io --docker-username=geonusp --docker-password=test-ghcr-token --dry-run=client -o yaml' "$kubectl_log" \
+    || fail 'sync script did not create the expected GHCR Secret'
+  grep -Fxq 'apply -f -' "$kubectl_log" \
+    || fail 'sync script did not apply the generated Secret'
+}
+
 test_kubeconfig_files_are_ignored() {
   git -C "$repo_root" check-ignore -q kubeconfig \
     || fail 'kubeconfig is not ignored'
@@ -385,6 +417,7 @@ main() {
   test_bootstrap_verifies_expected_nodes_and_coredns
   test_cilium_existing_install_is_reconciled_and_verified
   test_python_is_checked_before_worker_join
+  test_ghcr_secret_is_rehydrated_from_ssm
   test_kubeconfig_files_are_ignored
   printf 'PASS bootstrap script tests\n'
 }
