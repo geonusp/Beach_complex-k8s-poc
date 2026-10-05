@@ -438,6 +438,32 @@ EOF
     || fail 'Redis rollout was not verified'
 }
 
+test_beach_deployment_creates_runtime_secret_and_rolls_out() {
+  local bin_dir="$test_dir/beach-deploy-bin"
+  local parameters_file="$test_dir/beach-deploy-parameters"
+  local remote_script="$test_dir/beach-deploy-remote.sh"
+  local kubectl_log="$test_dir/kubectl-beach-deploy.log"
+
+  write_fake_tools "$bin_dir"
+  cat > "$bin_dir/kubectl" <<'EOF'
+#!/usr/bin/env bash
+printf '%s\n' "$*" >> "$KUBECTL_LOG"
+EOF
+  chmod +x "$bin_dir/kubectl"
+
+  PATH="$bin_dir:$PATH" AWS_PARAMETERS_FILE="$parameters_file" \
+    bash "$script_dir/deploy-beach.sh" >/dev/null
+  decode_remote_script "$parameters_file" "$remote_script"
+  PATH="$bin_dir:$PATH" KUBECTL_LOG="$kubectl_log" bash "$remote_script"
+
+  grep -Fq -- 'create secret generic beach-runtime --namespace beach' "$kubectl_log" \
+    || fail 'Beach runtime Secret was not generated'
+  grep -Fq -- 'apply -k /tmp/beach-app' "$kubectl_log" \
+    || fail 'Beach manifests were not applied with kustomize'
+  grep -Fxq -- '-n beach rollout status deployment/beach --timeout=300s' "$kubectl_log" \
+    || fail 'Beach deployment rollout was not verified'
+}
+
 test_kubeconfig_files_are_ignored() {
   git -C "$repo_root" check-ignore -q kubeconfig \
     || fail 'kubeconfig is not ignored'
@@ -464,6 +490,7 @@ main() {
   test_ghcr_secret_is_rehydrated_from_ssm
   test_ghcr_secret_script_bootstraps_remote_aws_cli
   test_dependencies_are_applied_on_the_control_plane
+  test_beach_deployment_creates_runtime_secret_and_rolls_out
   test_kubeconfig_files_are_ignored
   printf 'PASS bootstrap script tests\n'
 }
