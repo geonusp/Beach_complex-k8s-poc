@@ -481,6 +481,25 @@ test_kubeconfig_files_are_ignored() {
     || fail '*.conf files are not ignored'
 }
 
+test_provision_and_deploy_runs_steps_in_order() {
+  local script="$repo_root/deploy/k8s/scripts/provision-and-deploy.sh"
+  local apply_line bootstrap_line ghcr_line dependencies_line beach_line destroy_line
+
+  [[ -x "$script" ]] || fail 'provision-and-deploy.sh is not executable'
+  apply_line="$(grep -nF 'terraform -chdir=' "$script" | grep -F 'apply -auto-approve' | cut -d: -f1)"
+  bootstrap_line="$(grep -nF 'bootstrap-cluster.sh' "$script" | head -n1 | cut -d: -f1)"
+  ghcr_line="$(grep -nF 'sync-ghcr-secret.sh' "$script" | head -n1 | cut -d: -f1)"
+  dependencies_line="$(grep -nF 'deploy-dependencies.sh' "$script" | head -n1 | cut -d: -f1)"
+  beach_line="$(grep -nF 'deploy-beach.sh' "$script" | head -n1 | cut -d: -f1)"
+  destroy_line="$(grep -nF 'destroy' "$script" | head -n1 | cut -d: -f1)"
+
+  [[ -n "$apply_line" && -n "$bootstrap_line" && -n "$ghcr_line" && -n "$dependencies_line" && -n "$beach_line" ]] \
+    || fail 'provision-and-deploy.sh is missing a required deployment step'
+  ((apply_line < bootstrap_line && bootstrap_line < ghcr_line && ghcr_line < dependencies_line && dependencies_line < beach_line)) \
+    || fail 'provision-and-deploy.sh deployment steps are out of order'
+  [[ -n "$destroy_line" ]] || fail 'provision-and-deploy.sh does not provide the destroy path'
+}
+
 main() {
   if (($#)); then
     "$1"
@@ -502,6 +521,7 @@ main() {
   test_dependencies_are_applied_on_the_control_plane
   test_beach_deployment_creates_runtime_secret_and_rolls_out
   test_kubeconfig_files_are_ignored
+  test_provision_and_deploy_runs_steps_in_order
   printf 'PASS bootstrap script tests\n'
 }
 
