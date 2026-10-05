@@ -412,6 +412,32 @@ test_ghcr_secret_script_bootstraps_remote_aws_cli() {
     || fail 'sync script does not use the official AWS CLI v2 installer'
 }
 
+test_dependencies_are_applied_on_the_control_plane() {
+  local bin_dir="$test_dir/dependencies-bin"
+  local parameters_file="$test_dir/dependencies-parameters"
+  local remote_script="$test_dir/dependencies-remote.sh"
+  local kubectl_log="$test_dir/kubectl-dependencies.log"
+
+  write_fake_tools "$bin_dir"
+  cat > "$bin_dir/kubectl" <<'EOF'
+#!/usr/bin/env bash
+printf '%s\n' "$*" >> "$KUBECTL_LOG"
+EOF
+  chmod +x "$bin_dir/kubectl"
+
+  PATH="$bin_dir:$PATH" AWS_PARAMETERS_FILE="$parameters_file" \
+    bash "$script_dir/deploy-dependencies.sh" >/dev/null
+  decode_remote_script "$parameters_file" "$remote_script"
+  PATH="$bin_dir:$PATH" KUBECTL_LOG="$kubectl_log" bash "$remote_script"
+
+  grep -Fxq 'apply -k /tmp/beach-dependencies' "$kubectl_log" \
+    || fail 'dependency manifests were not applied with kustomize'
+  grep -Fxq -- '-n beach rollout status deployment/postgres --timeout=300s' "$kubectl_log" \
+    || fail 'PostgreSQL rollout was not verified'
+  grep -Fxq -- '-n beach rollout status deployment/redis --timeout=300s' "$kubectl_log" \
+    || fail 'Redis rollout was not verified'
+}
+
 test_kubeconfig_files_are_ignored() {
   git -C "$repo_root" check-ignore -q kubeconfig \
     || fail 'kubeconfig is not ignored'
@@ -437,6 +463,7 @@ main() {
   test_python_is_checked_before_worker_join
   test_ghcr_secret_is_rehydrated_from_ssm
   test_ghcr_secret_script_bootstraps_remote_aws_cli
+  test_dependencies_are_applied_on_the_control_plane
   test_kubeconfig_files_are_ignored
   printf 'PASS bootstrap script tests\n'
 }
