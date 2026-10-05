@@ -3,5 +3,8 @@
 *.tfstate.*
 *.tfvars
 !*.tfvars.example
+tfplan
+*.tfplan
+tfplan.txt
 crash.log
 crash.*.log

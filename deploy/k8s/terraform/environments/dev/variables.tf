@@ -31,8 +31,9 @@ variable "vpc_id" {
 }
 
 variable "ami_id" {
-  description = "Ubuntu Server 24.04 LTS x86_64 AMI ID used by every node."
+  description = "Pinned Ubuntu Server 24.04 LTS x86_64 AMI ID for the us-east-1 dev cluster."
   type        = string
+  default     = "ami-0045d7fc2ad003464"
 
   validation {
     condition     = can(regex("^ami-[0-9a-f]+$", var.ami_id))

@@ -1,0 +1,18 @@
+# Cilium Helm 값. 클러스터를 재생성해도 같은 구성이 나오도록 파일로 고정한다.
+
+ipam:
+  mode: cluster-pool
+  operator:
+    # Cilium 기본값은 10.0.0.0/8이며, 이는 beach-vpc(10.0.0.0/16)를 통째로 포함한다.
+    # 그대로 두면 Pod는 뜨지만 노드 간 통신과 AWS API 호출이 간헐적으로 실패한다.
+    # kubeadm init의 --pod-network-cidr과 반드시 같은 값이어야 한다.
+    clusterPoolIPv4PodCIDRList:
+      - 10.244.0.0/16
+
+# kube-proxy를 유지한다. Cilium의 kube-proxy 대체는 이슈 #7에서 별도로 검토한다.
+# 여기서 켜면 노드가 Ready가 되지 않을 때 원인 후보가 하나 늘어난다.
+kubeProxyReplacement: false
+
+# Hubble은 이슈 #7에서 켠다. 이 단계의 목표는 전 노드 Ready까지다.
+hubble:
+  enabled: false

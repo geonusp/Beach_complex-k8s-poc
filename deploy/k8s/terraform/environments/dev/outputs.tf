@@ -21,3 +21,27 @@ output "cluster_security_group_id" {
   description = "Security group shared by every cluster node."
   value       = aws_security_group.cluster.id
 }
+
+output "control_plane_instance_id" {
+  description = "Instance ID of the control plane node. Bootstrap scripts target it with SSM."
+  value = one([
+    for key, node in var.nodes : module.node[key].instance_id if node.role == "control-plane"
+  ])
+}
+
+output "worker_instance_ids" {
+  description = "Instance ID of each worker node, keyed by node name."
+  value = {
+    for key, node in var.nodes : key => module.node[key].instance_id if node.role != "control-plane"
+  }
+}
+
+output "node_hostnames" {
+  description = "Hostname of each node, keyed by node name. Used as the kubeadm node name."
+  value       = { for key, node in module.node : key => node.hostname }
+}
+
+output "node_roles" {
+  description = "Cluster role of each node, keyed by node name. Used when labelling nodes."
+  value       = { for key, node in var.nodes : key => node.role }
+}

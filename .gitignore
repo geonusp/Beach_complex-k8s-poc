@@ -49,6 +49,10 @@ target/
 # Firebase service account key (보안상 절대 커밋 금지)
 **/firebase-service-account.json
 
+# Kubernetes administrator credentials
+kubeconfig
+*.conf
+
 # Firebase 자동 생성 설정 파일 (환경변수 포함)
 front/public/firebase-config.js
 
