@@ -418,6 +418,9 @@ test_dependencies_are_applied_on_the_control_plane() {
   local remote_script="$test_dir/dependencies-remote.sh"
   local kubectl_log="$test_dir/kubectl-dependencies.log"
 
+  grep -Fq 'image: postgis/postgis:16-3.5-alpine' "$repo_root/deploy/k8s/dependencies/postgres.yaml" \
+    || fail 'PostgreSQL dependency does not use a PostGIS image'
+
   write_fake_tools "$bin_dir"
   cat > "$bin_dir/kubectl" <<'EOF'
 #!/usr/bin/env bash
