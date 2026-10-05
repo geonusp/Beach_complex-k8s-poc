@@ -4,7 +4,7 @@ set -Eeuo pipefail
 source "$(dirname "${BASH_SOURCE[0]}")/lib/ssm.sh"
 
 # Cilium values.yaml의 clusterPoolIPv4PodCIDRList와 반드시 같은 값이어야 한다.
-readonly pod_network_cidr="10.244.0.0/16"
+readonly pod_network_cidr="${POD_NETWORK_CIDR:-10.244.0.0/16}"
 
 main() {
   require_tools

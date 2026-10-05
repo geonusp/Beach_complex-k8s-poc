@@ -233,7 +233,7 @@ EOF
     || fail 'incomplete control plane did not report a recovery-oriented error'
 }
 
-test_pod_cidr_override_cannot_diverge_from_cilium() {
+test_pod_cidr_override_reaches_kubeadm() {
   local bin_dir="$test_dir/cidr-bin"
   local parameters_file="$test_dir/cidr-parameters"
   local remote_script="$test_dir/cidr-remote.sh"
@@ -263,8 +263,8 @@ EOF
   decode_remote_script "$parameters_file" "$remote_script"
   PATH="$bin_dir:$PATH" KUBEADM_LOG="$kubeadm_log" bash "$remote_script"
 
-  [[ "$(cat "$kubeadm_log")" == *'--pod-network-cidr 10.244.0.0/16'* ]] \
-    || fail 'kubeadm Pod CIDR diverged from the committed Cilium values'
+  [[ "$(cat "$kubeadm_log")" == *'--pod-network-cidr 10.245.0.0/16'* ]] \
+    || fail 'POD_NETWORK_CIDR did not reach kubeadm'
 }
 
 test_bootstrap_verifies_expected_nodes_and_coredns() {
@@ -310,11 +310,15 @@ test_cilium_existing_install_is_reconciled_and_verified() {
   local remote_script="$test_dir/cilium-remote.sh"
   local helm_log="$test_dir/helm.log"
   local kubectl_log="$test_dir/kubectl-cilium.log"
+  local values_capture="$test_dir/cilium-values.yaml"
 
   write_fake_tools "$bin_dir"
   cat > "$bin_dir/helm" <<'EOF'
 #!/usr/bin/env bash
 printf '%s\n' "$*" >> "$HELM_LOG"
+if [[ "$1 $2" == 'upgrade --install' ]]; then
+  cp /tmp/cilium-values.yaml "$VALUES_CAPTURE"
+fi
 EOF
   cat > "$bin_dir/kubectl" <<'EOF'
 #!/usr/bin/env bash
@@ -323,15 +327,19 @@ EOF
   chmod +x "$bin_dir/helm" "$bin_dir/kubectl"
 
   PATH="$bin_dir:$PATH" AWS_PARAMETERS_FILE="$parameters_file" \
+    POD_NETWORK_CIDR=10.245.0.0/16 \
     bash "$script_dir/install-cilium.sh" >/dev/null
   decode_remote_script "$parameters_file" "$remote_script"
   PATH="$bin_dir:$PATH" HELM_LOG="$helm_log" KUBECTL_LOG="$kubectl_log" \
+    VALUES_CAPTURE="$values_capture" \
     bash "$remote_script"
 
   assert_file_equals 'repo add cilium https://helm.cilium.io/ --force-update
 repo update
 upgrade --install cilium cilium/cilium --version 1.20.2 --namespace kube-system --values /tmp/cilium-values.yaml' "$helm_log"
   assert_file_equals '-n kube-system rollout status daemonset/cilium --timeout=300s' "$kubectl_log"
+  grep -q -- '- 10.245.0.0/16' "$values_capture" \
+    || fail 'POD_NETWORK_CIDR did not reach the Cilium values'
 }
 
 test_python_is_checked_before_worker_join() {
@@ -372,7 +380,7 @@ main() {
   test_ssm_waits_for_in_progress_command
   test_existing_control_plane_restores_admin_kubeconfig
   test_incomplete_control_plane_is_rejected
-  test_pod_cidr_override_cannot_diverge_from_cilium
+  test_pod_cidr_override_reaches_kubeadm
   test_control_plane_keeps_node_selector_role_empty
   test_bootstrap_verifies_expected_nodes_and_coredns
   test_cilium_existing_install_is_reconciled_and_verified
