@@ -406,8 +406,10 @@ test_ghcr_secret_script_bootstraps_remote_aws_cli() {
 
   grep -Fq 'command -v aws' "$remote_script" \
     || fail 'sync script does not check for remote AWS CLI'
-  grep -Fq 'apt-get -o DPkg::Lock::Timeout=300 install --yes awscli' "$remote_script" \
-    || fail 'sync script does not install remote AWS CLI'
+  grep -Fq 'apt-get -o DPkg::Lock::Timeout=300 install --yes unzip' "$remote_script" \
+    || fail 'sync script does not install the AWS CLI installer dependency'
+  grep -Fq 'https://awscli.amazonaws.com/awscli-exe-linux-x86_64.zip' "$remote_script" \
+    || fail 'sync script does not use the official AWS CLI v2 installer'
 }
 
 test_kubeconfig_files_are_ignored() {

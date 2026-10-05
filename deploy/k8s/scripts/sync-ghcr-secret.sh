@@ -22,7 +22,12 @@ export KUBECONFIG=/root/.kube/config
 
 if ! command -v aws >/dev/null 2>&1; then
   apt-get -o DPkg::Lock::Timeout=300 update
-  apt-get -o DPkg::Lock::Timeout=300 install --yes awscli
+  apt-get -o DPkg::Lock::Timeout=300 install --yes unzip
+  installer_dir=\"\$(mktemp -d)\"
+  curl -fsSL https://awscli.amazonaws.com/awscli-exe-linux-x86_64.zip \\
+    -o \"\$installer_dir/awscliv2.zip\"
+  unzip -q \"\$installer_dir/awscliv2.zip\" -d \"\$installer_dir\"
+  \"\$installer_dir/aws/install\" --update
 fi
 
 ghcr_token=\"\$(aws ssm get-parameter \\
