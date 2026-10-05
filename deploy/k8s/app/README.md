@@ -15,6 +15,19 @@ kubectl apply -f deploy/k8s/app/secret.yaml
 kubectl apply -k deploy/k8s/app
 ```
 
+배포할 이미지 태그를 SHA로 고정하려면 적용 전에 Kustomize image를 변경한다.
+
+```bash
+kustomize edit set image beach-backend=ghcr.io/geonusp/beach_complex-k8s-poc-backend:<IMAGE_SHA>
+kubectl apply -k deploy/k8s/app
+```
+
+Control Plane에서 기본 검증을 실행한다.
+
+```bash
+bash deploy/k8s/scripts/verify-beach.sh
+```
+
 ## 외부 접근
 
 Ingress는 `nginx` IngressClass를 사용한다. 클러스터에 Ingress Controller가 먼저 설치되어 있어야 한다.
