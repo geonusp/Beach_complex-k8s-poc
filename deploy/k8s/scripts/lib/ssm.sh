@@ -27,12 +27,14 @@ require_tools() {
 terraform_output() {
   local name="$1"
   terraform -chdir="$terraform_environment" output -raw "$name" 2>/dev/null \
+    | tr -d '\r' \
     || fail "terraform output '$name' is not available. Run terraform apply first."
 }
 
 terraform_output_json() {
   local name="$1"
   terraform -chdir="$terraform_environment" output -json "$name" 2>/dev/null \
+    | tr -d '\r' \
     || fail "terraform output '$name' is not available. Run terraform apply first."
 }
 
@@ -42,6 +44,12 @@ ssm_run() {
   local instance_id="$1"
   local script="$2"
   local encoded command_id status deadline
+
+  # Windows Git Bash can preserve carriage returns or terminal control bytes
+  # when Terraform output is passed through command substitution. AWS accepts
+  # only the instance-id characters, so normalize the target before calling SSM.
+  instance_id="$(printf '%s' "$instance_id" | tr -cd '[:alnum:]-')"
+  script="$(printf '%s' "$script" | tr -d '\r')"
 
   encoded="$(printf '%s' "$script" | base64 -w0)"
 
