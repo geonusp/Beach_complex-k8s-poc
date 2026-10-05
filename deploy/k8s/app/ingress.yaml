@@ -1,0 +1,22 @@
+apiVersion: networking.k8s.io/v1
+kind: Ingress
+metadata:
+  name: beach
+  namespace: beach
+  labels:
+    app.kubernetes.io/name: beach
+    app.kubernetes.io/component: backend
+    app.kubernetes.io/part-of: beach-complex
+spec:
+  ingressClassName: nginx
+  rules:
+    - host: beach.example.com
+      http:
+        paths:
+          - path: /
+            pathType: Prefix
+            backend:
+              service:
+                name: beach
+                port:
+                  name: http

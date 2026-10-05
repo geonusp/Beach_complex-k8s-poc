@@ -63,6 +63,17 @@ variable "kubernetes_version" {
   }
 }
 
+variable "ghcr_token_parameter_name" {
+  description = "SSM SecureString parameter that stores the private GHCR token used to pull Beach images."
+  type        = string
+  default     = "/beach/dev/ghcr/token"
+
+  validation {
+    condition     = can(regex("^/[A-Za-z0-9_.\\-/]+$", var.ghcr_token_parameter_name))
+    error_message = "ghcr_token_parameter_name must be an absolute SSM parameter path."
+  }
+}
+
 variable "nodes" {
   description = "Cluster nodes keyed by short name."
 

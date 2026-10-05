@@ -48,6 +48,9 @@ EOF
 set -Eeuo pipefail
 
 case "$1 $2" in
+  'ssm get-parameter')
+    printf 'test-ghcr-token\n'
+    ;;
   'ssm send-command')
     while (($#)); do
       if [[ "$1" == '--parameters' ]]; then
@@ -362,6 +365,105 @@ test_python_is_checked_before_worker_join() {
     || fail 'join-workers.sh did not report the missing python3 dependency'
 }
 
+test_ghcr_secret_is_rehydrated_from_ssm() {
+  local bin_dir="$test_dir/ghcr-bin"
+  local parameters_file="$test_dir/ghcr-parameters"
+  local remote_script="$test_dir/ghcr-remote.sh"
+  local kubectl_log="$test_dir/kubectl-ghcr.log"
+
+  write_fake_tools "$bin_dir"
+  cat > "$bin_dir/kubectl" <<'EOF'
+#!/usr/bin/env bash
+printf '%s\n' "$*" >> "$KUBECTL_LOG"
+EOF
+  chmod +x "$bin_dir/kubectl"
+
+  PATH="$bin_dir:$PATH" AWS_PARAMETERS_FILE="$parameters_file" \
+    GHCR_USERNAME=geonusp GHCR_TOKEN_PARAMETER_NAME=/beach/dev/ghcr/token \
+    bash "$script_dir/sync-ghcr-secret.sh" >/dev/null
+  decode_remote_script "$parameters_file" "$remote_script"
+  PATH="$bin_dir:$PATH" KUBECTL_LOG="$kubectl_log" bash "$remote_script"
+
+  ! grep -Fq 'test-ghcr-token' "$parameters_file" \
+    || fail 'GHCR token was embedded in the SSM command payload'
+  grep -Fxq 'get namespace beach' "$kubectl_log" \
+    || fail 'sync script did not check the target namespace'
+  grep -Fxq 'create secret docker-registry ghcr-pull --namespace beach --docker-server=ghcr.io --docker-username=geonusp --docker-password=test-ghcr-token --dry-run=client -o yaml' "$kubectl_log" \
+    || fail 'sync script did not create the expected GHCR Secret'
+  grep -Fxq 'apply -f -' "$kubectl_log" \
+    || fail 'sync script did not apply the generated Secret'
+}
+
+test_ghcr_secret_script_bootstraps_remote_aws_cli() {
+  local bin_dir="$test_dir/ghcr-aws-cli-bin"
+  local parameters_file="$test_dir/ghcr-aws-cli-parameters"
+  local remote_script="$test_dir/ghcr-aws-cli-remote.sh"
+
+  write_fake_tools "$bin_dir"
+  PATH="$bin_dir:$PATH" AWS_PARAMETERS_FILE="$parameters_file" \
+    GHCR_USERNAME=geonusp bash "$script_dir/sync-ghcr-secret.sh" >/dev/null
+  decode_remote_script "$parameters_file" "$remote_script"
+
+  grep -Fq 'command -v aws' "$remote_script" \
+    || fail 'sync script does not check for remote AWS CLI'
+  grep -Fq 'apt-get -o DPkg::Lock::Timeout=300 install --yes unzip' "$remote_script" \
+    || fail 'sync script does not install the AWS CLI installer dependency'
+  grep -Fq 'https://awscli.amazonaws.com/awscli-exe-linux-x86_64.zip' "$remote_script" \
+    || fail 'sync script does not use the official AWS CLI v2 installer'
+}
+
+test_dependencies_are_applied_on_the_control_plane() {
+  local bin_dir="$test_dir/dependencies-bin"
+  local parameters_file="$test_dir/dependencies-parameters"
+  local remote_script="$test_dir/dependencies-remote.sh"
+  local kubectl_log="$test_dir/kubectl-dependencies.log"
+
+  write_fake_tools "$bin_dir"
+  cat > "$bin_dir/kubectl" <<'EOF'
+#!/usr/bin/env bash
+printf '%s\n' "$*" >> "$KUBECTL_LOG"
+EOF
+  chmod +x "$bin_dir/kubectl"
+
+  PATH="$bin_dir:$PATH" AWS_PARAMETERS_FILE="$parameters_file" \
+    bash "$script_dir/deploy-dependencies.sh" >/dev/null
+  decode_remote_script "$parameters_file" "$remote_script"
+  PATH="$bin_dir:$PATH" KUBECTL_LOG="$kubectl_log" bash "$remote_script"
+
+  grep -Fxq 'apply -k /tmp/beach-dependencies' "$kubectl_log" \
+    || fail 'dependency manifests were not applied with kustomize'
+  grep -Fxq -- '-n beach rollout status deployment/postgres --timeout=300s' "$kubectl_log" \
+    || fail 'PostgreSQL rollout was not verified'
+  grep -Fxq -- '-n beach rollout status deployment/redis --timeout=300s' "$kubectl_log" \
+    || fail 'Redis rollout was not verified'
+}
+
+test_beach_deployment_creates_runtime_secret_and_rolls_out() {
+  local bin_dir="$test_dir/beach-deploy-bin"
+  local parameters_file="$test_dir/beach-deploy-parameters"
+  local remote_script="$test_dir/beach-deploy-remote.sh"
+  local kubectl_log="$test_dir/kubectl-beach-deploy.log"
+
+  write_fake_tools "$bin_dir"
+  cat > "$bin_dir/kubectl" <<'EOF'
+#!/usr/bin/env bash
+printf '%s\n' "$*" >> "$KUBECTL_LOG"
+EOF
+  chmod +x "$bin_dir/kubectl"
+
+  PATH="$bin_dir:$PATH" AWS_PARAMETERS_FILE="$parameters_file" \
+    bash "$script_dir/deploy-beach.sh" >/dev/null
+  decode_remote_script "$parameters_file" "$remote_script"
+  PATH="$bin_dir:$PATH" KUBECTL_LOG="$kubectl_log" bash "$remote_script"
+
+  grep -Fq -- 'create secret generic beach-runtime --namespace beach' "$kubectl_log" \
+    || fail 'Beach runtime Secret was not generated'
+  grep -Fq -- 'apply -k /tmp/beach-app' "$kubectl_log" \
+    || fail 'Beach manifests were not applied with kustomize'
+  grep -Fxq -- '-n beach rollout status deployment/beach --timeout=180s' "$kubectl_log" \
+    || fail 'Beach deployment rollout was not verified'
+}
+
 test_kubeconfig_files_are_ignored() {
   git -C "$repo_root" check-ignore -q kubeconfig \
     || fail 'kubeconfig is not ignored'
@@ -385,6 +487,10 @@ main() {
   test_bootstrap_verifies_expected_nodes_and_coredns
   test_cilium_existing_install_is_reconciled_and_verified
   test_python_is_checked_before_worker_join
+  test_ghcr_secret_is_rehydrated_from_ssm
+  test_ghcr_secret_script_bootstraps_remote_aws_cli
+  test_dependencies_are_applied_on_the_control_plane
+  test_beach_deployment_creates_runtime_secret_and_rolls_out
   test_kubeconfig_files_are_ignored
   printf 'PASS bootstrap script tests\n'
 }

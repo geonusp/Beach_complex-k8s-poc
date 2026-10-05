@@ -9,6 +9,9 @@ vpc_id = "vpc-0123456789abcdef0"
 # 버전을 올릴 때는 Cilium 호환성 표를 먼저 확인한다.
 kubernetes_version = "v1.36"
 
+# Private GHCR 토큰을 저장한 SSM SecureString 경로.
+ghcr_token_parameter_name = "/beach/dev/ghcr/token"
+
 # Kubernetes API(6443) 인바운드는 기본적으로 열지 않는다. 로컬 kubectl은 SSM 포트 포워딩을 쓴다.
 #
 #   aws ssm start-session --target <control-plane instance id> \
