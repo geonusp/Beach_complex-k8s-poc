@@ -394,6 +394,22 @@ EOF
     || fail 'sync script did not apply the generated Secret'
 }
 
+test_ghcr_secret_script_bootstraps_remote_aws_cli() {
+  local bin_dir="$test_dir/ghcr-aws-cli-bin"
+  local parameters_file="$test_dir/ghcr-aws-cli-parameters"
+  local remote_script="$test_dir/ghcr-aws-cli-remote.sh"
+
+  write_fake_tools "$bin_dir"
+  PATH="$bin_dir:$PATH" AWS_PARAMETERS_FILE="$parameters_file" \
+    GHCR_USERNAME=geonusp bash "$script_dir/sync-ghcr-secret.sh" >/dev/null
+  decode_remote_script "$parameters_file" "$remote_script"
+
+  grep -Fq 'command -v aws' "$remote_script" \
+    || fail 'sync script does not check for remote AWS CLI'
+  grep -Fq 'apt-get -o DPkg::Lock::Timeout=300 install --yes awscli' "$remote_script" \
+    || fail 'sync script does not install remote AWS CLI'
+}
+
 test_kubeconfig_files_are_ignored() {
   git -C "$repo_root" check-ignore -q kubeconfig \
     || fail 'kubeconfig is not ignored'
@@ -418,6 +434,7 @@ main() {
   test_cilium_existing_install_is_reconciled_and_verified
   test_python_is_checked_before_worker_join
   test_ghcr_secret_is_rehydrated_from_ssm
+  test_ghcr_secret_script_bootstraps_remote_aws_cli
   test_kubeconfig_files_are_ignored
   printf 'PASS bootstrap script tests\n'
 }

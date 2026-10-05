@@ -20,6 +20,11 @@ main() {
 set -Eeuo pipefail
 export KUBECONFIG=/root/.kube/config
 
+if ! command -v aws >/dev/null 2>&1; then
+  apt-get -o DPkg::Lock::Timeout=300 update
+  apt-get -o DPkg::Lock::Timeout=300 install --yes awscli
+fi
+
 ghcr_token=\"\$(aws ssm get-parameter \\
   --name '$ghcr_parameter_name' \\
   --with-decryption \\
