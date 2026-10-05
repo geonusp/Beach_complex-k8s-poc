@@ -70,6 +70,25 @@ aws ssm get-parameters --region us-east-1 \
 
 ## 2. 생성
 
+### 2-0. 원클릭 생성 및 배포
+
+Terraform 인프라 생성부터 kubeadm·Cilium·GHCR 인증·PostgreSQL·Redis·Beach 배포까지
+의존성 순서대로 실행하려면 저장소 루트에서 다음 스크립트를 사용한다.
+
+```bash
+bash deploy/k8s/scripts/provision-and-deploy.sh
+```
+
+이 스크립트는 다음 단계를 순차 실행한다.
+
+1. `terraform apply -auto-approve`
+2. `bootstrap-cluster.sh`
+3. `sync-ghcr-secret.sh`
+4. `deploy-dependencies.sh`
+5. `deploy-beach.sh`
+
+단계별 동작을 직접 확인해야 하거나 중간 단계만 재실행할 때는 아래 수동 절차를 사용한다.
+
 ### 2-1. 인프라
 
 ```bash
@@ -225,6 +244,15 @@ control plane의 `/etc/kubernetes/admin.conf`를 받아 `server:`를 `https://12
 ---
 
 ## 5. 삭제
+
+원클릭 생성 스크립트의 삭제 경로는 Terraform 확인 프롬프트를 유지한다.
+
+```bash
+cd ../../..          # 저장소 루트
+bash deploy/k8s/scripts/provision-and-deploy.sh --destroy
+```
+
+수동으로 삭제하려면 아래 명령을 사용한다.
 
 ```bash
 cd deploy/k8s/terraform/environments/dev
