@@ -52,6 +52,7 @@ target/
 # Kubernetes administrator credentials
 kubeconfig
 *.conf
+deploy/k8s/app/secret.yaml
 
 # Firebase 자동 생성 설정 파일 (환경변수 포함)
 front/public/firebase-config.js
