@@ -447,6 +447,9 @@ test_beach_deployment_creates_runtime_secret_and_rolls_out() {
   local remote_script="$test_dir/beach-deploy-remote.sh"
   local kubectl_log="$test_dir/kubectl-beach-deploy.log"
 
+  grep -Fq 'APP_FIREBASE_ENABLED: "false"' "$repo_root/deploy/k8s/app/configmap.yaml" \
+    || fail 'Beach ConfigMap does not disable Firebase for the credential-free PoC'
+
   write_fake_tools "$bin_dir"
   cat > "$bin_dir/kubectl" <<'EOF'
 #!/usr/bin/env bash
