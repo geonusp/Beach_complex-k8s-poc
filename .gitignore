@@ -53,6 +53,7 @@ target/
 kubeconfig
 *.conf
 deploy/k8s/app/secret.yaml
+deploy/k8s/loadtest/results/
 
 # Firebase 자동 생성 설정 파일 (환경변수 포함)
 front/public/firebase-config.js
