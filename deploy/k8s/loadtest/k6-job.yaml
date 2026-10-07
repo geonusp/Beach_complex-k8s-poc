@@ -21,7 +21,7 @@ spec:
         node-role: observability
       containers:
         - name: k6
-          image: grafana/k6:0.54.0
+          image: grafana/k6:2.3.0
           imagePullPolicy: IfNotPresent
           args:
             - run

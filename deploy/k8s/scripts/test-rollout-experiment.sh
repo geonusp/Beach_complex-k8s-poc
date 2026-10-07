@@ -22,7 +22,7 @@ test_loadtest_assets_are_pinned_and_scheduled() {
 
   [[ -f "$job" ]] || fail 'k6 Job manifest is missing'
   [[ -f "$script" ]] || fail 'k6 rollout scenario is missing'
-  assert_contains 'image: grafana/k6:0.54.0' "$job"
+  assert_contains 'image: grafana/k6:2.3.0' "$job"
   assert_contains 'node-role: observability' "$job"
   assert_contains 'ttlSecondsAfterFinished: 3600' "$job"
   assert_contains 'requests:' "$job"
