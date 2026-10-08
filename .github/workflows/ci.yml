@@ -66,6 +66,9 @@ jobs:
       - name: Test Kubernetes bootstrap scripts
         run: bash deploy/k8s/scripts/test-bootstrap-scripts.sh
 
+      - name: Test Kubernetes rollout experiment scripts
+        run: bash deploy/k8s/scripts/test-rollout-experiment.sh
+
       - name: Validate Kubernetes IaC
         run: bash deploy/k8s/scripts/validate-iac.sh
 

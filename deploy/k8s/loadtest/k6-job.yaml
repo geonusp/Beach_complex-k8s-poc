@@ -1,0 +1,56 @@
+apiVersion: batch/v1
+kind: Job
+metadata:
+  name: beach-k6-rollout
+  namespace: beach
+  labels:
+    app.kubernetes.io/name: beach-k6
+    app.kubernetes.io/component: load-generator
+    app.kubernetes.io/part-of: beach-complex
+spec:
+  backoffLimit: 0
+  ttlSecondsAfterFinished: 3600
+  template:
+    metadata:
+      labels:
+        app.kubernetes.io/name: beach-k6
+        app.kubernetes.io/component: load-generator
+    spec:
+      restartPolicy: Never
+      nodeSelector:
+        node-role: observability
+      containers:
+        - name: k6
+          image: grafana/k6:2.3.0
+          imagePullPolicy: IfNotPresent
+          args:
+            - run
+            - /scripts/rollout.js
+            - --out
+            - json=/results/raw.json
+          env:
+            - name: BEACH_URL
+              value: "http://beach.beach.svc.cluster.local"
+            - name: K6_RATE
+              value: "1"
+            - name: K6_DURATION
+              value: "2m"
+          resources:
+            requests:
+              cpu: 100m
+              memory: 128Mi
+            limits:
+              cpu: 500m
+              memory: 256Mi
+          volumeMounts:
+            - name: scenario
+              mountPath: /scripts
+              readOnly: true
+            - name: results
+              mountPath: /results
+      volumes:
+        - name: scenario
+          configMap:
+            name: beach-k6-rollout
+        - name: results
+          emptyDir: {}
