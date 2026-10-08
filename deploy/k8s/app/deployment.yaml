@@ -9,6 +9,11 @@ metadata:
     app.kubernetes.io/part-of: beach-complex
 spec:
   replicas: 2
+  strategy:
+    type: RollingUpdate
+    rollingUpdate:
+      maxUnavailable: 0
+      maxSurge: 1
   selector:
     matchLabels:
       app.kubernetes.io/name: beach
@@ -20,6 +25,7 @@ spec:
         app.kubernetes.io/component: backend
         app.kubernetes.io/part-of: beach-complex
     spec:
+      terminationGracePeriodSeconds: 40
       imagePullSecrets:
         - name: ghcr-pull
       nodeSelector:
@@ -53,9 +59,13 @@ spec:
             limits:
               cpu: "1"
               memory: 1Gi
+          lifecycle:
+            preStop:
+              sleep:
+                seconds: 10
           startupProbe:
             httpGet:
-              path: /actuator/health
+              path: /actuator/health/liveness
               port: management
             failureThreshold: 30
             periodSeconds: 10
