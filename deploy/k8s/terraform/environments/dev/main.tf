@@ -7,6 +7,35 @@ locals {
 
 data "aws_caller_identity" "current" {}
 
+# The experiment bucket is ephemeral and is removed with the dev cluster.
+resource "aws_s3_bucket" "experiment_results" {
+  bucket_prefix = "${local.name_prefix}-results-"
+  force_destroy = true
+
+  tags = {
+    Name      = "${local.name_prefix}-results"
+    Component = "kubernetes-experiment"
+  }
+}
+
+resource "aws_s3_bucket_public_access_block" "experiment_results" {
+  bucket                  = aws_s3_bucket.experiment_results.id
+  block_public_acls       = true
+  block_public_policy     = true
+  ignore_public_acls      = true
+  restrict_public_buckets = true
+}
+
+resource "aws_s3_bucket_server_side_encryption_configuration" "experiment_results" {
+  bucket = aws_s3_bucket.experiment_results.id
+
+  rule {
+    apply_server_side_encryption_by_default {
+      sse_algorithm = "AES256"
+    }
+  }
+}
+
 # 클러스터 노드가 공유하는 Security Group.
 # 노드 사이 통신은 self 참조로 전부 허용한다. kubeadm이 요구하는 포트(6443, 2379-2380,
 # 10250, 10256, 10257, 10259, 30000-32767)에 더해 Cilium의 VXLAN 8472/UDP와 health 4240,
@@ -108,6 +137,26 @@ resource "aws_iam_role_policy" "node_ghcr_parameter_read" {
       Effect   = "Allow"
       Action   = ["ssm:GetParameter"]
       Resource = "arn:aws:ssm:${var.aws_region}:${data.aws_caller_identity.current.account_id}:parameter${var.ghcr_token_parameter_name}"
+    }]
+  })
+}
+
+resource "aws_iam_role_policy" "node_ssm_output_s3" {
+  name = "${local.name_prefix}-ssm-output-s3"
+  role = aws_iam_role.node.id
+
+  policy = jsonencode({
+    Version = "2012-10-17"
+    Statement = [{
+      Effect = "Allow"
+      Action = [
+        "s3:GetBucketLocation",
+        "s3:PutObject"
+      ]
+      Resource = [
+        aws_s3_bucket.experiment_results.arn,
+        "${aws_s3_bucket.experiment_results.arn}/rollout/*"
+      ]
     }]
   })
 }

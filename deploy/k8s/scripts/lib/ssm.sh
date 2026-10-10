@@ -43,13 +43,20 @@ terraform_output_json() {
 ssm_run() {
   local instance_id="$1"
   local script="$2"
-  local encoded command_id status deadline
+  local output_bucket="${3:-}" output_prefix="${4:-}"
+  local encoded command_id status deadline output_url output_uri
+  local -a output_args=()
 
   # Windows Git Bash can preserve carriage returns or terminal control bytes
   # when Terraform output is passed through command substitution. AWS accepts
   # only the instance-id characters, so normalize the target before calling SSM.
   instance_id="$(printf '%s' "$instance_id" | tr -cd '[:alnum:]-')"
   script="$(printf '%s' "$script" | tr -d '\r')"
+
+  if [[ -n "$output_bucket" ]]; then
+    [[ -n "$output_prefix" ]] || fail 'SSM S3 output prefix is required when a bucket is set'
+    output_args=(--output-s3-bucket-name "$output_bucket" --output-s3-key-prefix "$output_prefix")
+  fi
 
   encoded="$(printf '%s' "$script" | base64 -w0)"
 
@@ -58,6 +65,7 @@ ssm_run() {
     --document-name AWS-RunShellScript \
     --comment "beach-k8s bootstrap" \
     --parameters "commands=echo $encoded | base64 -d | bash" \
+    "${output_args[@]}" \
     --query 'Command.CommandId' \
     --output text)" || fail "failed to send SSM command to $instance_id"
 
@@ -91,9 +99,20 @@ ssm_run() {
     esac
   done
 
-  aws ssm get-command-invocation \
-    --command-id "$command_id" \
-    --instance-id "$instance_id" \
-    --query 'StandardOutputContent' --output text
+  if [[ -n "$output_bucket" ]]; then
+    output_url="$(aws ssm get-command-invocation \
+      --command-id "$command_id" \
+      --instance-id "$instance_id" \
+      --query 'StandardOutputUrl' --output text)" \
+      || fail "failed to get SSM output URL for $instance_id"
+    output_uri="$(printf '%s\n' "$output_url" | sed -E 's#^https?://[^/]+/([^/]+)/#s3://\1/#')"
+    [[ "$output_uri" == s3://* ]] || fail "SSM output URL is invalid for $instance_id"
+    aws s3 cp "$output_uri" -
+  else
+    aws ssm get-command-invocation \
+      --command-id "$command_id" \
+      --instance-id "$instance_id" \
+      --query 'StandardOutputContent' --output text
+  fi
 
 }
