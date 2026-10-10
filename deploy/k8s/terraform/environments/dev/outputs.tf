@@ -5,6 +5,11 @@ output "node_instance_ids" {
   value       = { for key, node in module.node : key => node.instance_id }
 }
 
+output "experiment_results_bucket_name" {
+  description = "Ephemeral S3 bucket for SSM Run Command experiment output."
+  value       = aws_s3_bucket.experiment_results.bucket
+}
+
 output "node_private_ips" {
   description = "Private IPv4 address of each node, keyed by node name."
   value       = { for key, node in module.node : key => node.private_ip }
