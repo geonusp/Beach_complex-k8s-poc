@@ -27,6 +27,9 @@ test_loadtest_assets_are_pinned_and_scheduled() {
   assert_contains 'ttlSecondsAfterFinished: 3600' "$job"
   assert_contains 'requests:' "$job"
   assert_contains 'limits:' "$job"
+  assert_contains 'cat /results/raw.json' "$job"
+  assert_contains 'raw_json_start' "$job"
+  assert_contains 'raw_json_end' "$job"
   assert_contains "executor: 'constant-arrival-rate'" "$script"
   assert_contains '/api/beaches' "$script"
   assert_contains 'handleSummary' "$script"
@@ -111,6 +114,10 @@ EOF
   assert_contains "s/value: \"2m\"/value: \"331s\"/" "$remote_script"
   assert_contains 'trap cleanup EXIT' "$remote_script"
   assert_contains 'restore_needed=true' "$remote_script"
+  assert_contains 'kubectl -n beach logs "$k6_pod" -c k6' "$remote_script"
+  if grep -Fq 'kubectl -n beach exec "$k6_pod"' "$remote_script"; then
+    fail 'completed k6 pod must not be accessed with kubectl exec'
+  fi
   [[ "$(cat "$bucket_file")" == 'beach-test-results' ]] || fail 'SSM output bucket was not configured'
   [[ "$(cat "$prefix_file")" == 'rollout/smoke' ]] || fail 'SSM output prefix was not configured'
   [[ "$(cat "$s3_source_file")" == 's3://beach-test-results/rollout/smoke/command-1/i-control-plane/awsrunShellScript/0.awsrunShellScript/stdout' ]] \
