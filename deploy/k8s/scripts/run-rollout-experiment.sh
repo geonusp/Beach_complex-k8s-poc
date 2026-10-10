@@ -93,7 +93,24 @@ kubectl -n __NAMESPACE__ wait --for=condition=complete job/beach-k6-rollout --ti
 k6_pod="$(kubectl -n __NAMESPACE__ get pods -l job-name=beach-k6-rollout -o jsonpath='{.items[0].metadata.name}')"
 printf 'rollout_duration_seconds=%s\n' "$((rollout_finished - rollout_started))"
 printf 'k6_summary_start\n'
-kubectl -n __NAMESPACE__ logs "$k6_pod" -c k6
+kubectl -n __NAMESPACE__ logs "$k6_pod" -c k6 | awk '
+  /^\{"metric":/ {
+    if (!capturing) {
+      print "raw_json_start"
+      capturing = 1
+    }
+    print
+    next
+  }
+  capturing {
+    print "raw_json_end"
+    capturing = 0
+  }
+  { print }
+  END {
+    if (capturing) print "raw_json_end"
+  }
+'
 printf 'k6_summary_end\n'
 printf 'endpoint_samples_start\n'
 cat "$work_dir/endpoints.log"

@@ -28,8 +28,6 @@ test_loadtest_assets_are_pinned_and_scheduled() {
   assert_contains 'requests:' "$job"
   assert_contains 'limits:' "$job"
   assert_contains 'cat /results/raw.json' "$job"
-  assert_contains 'raw_json_start' "$job"
-  assert_contains 'raw_json_end' "$job"
   assert_contains "executor: 'constant-arrival-rate'" "$script"
   assert_contains '/api/beaches' "$script"
   assert_contains 'handleSummary' "$script"
@@ -115,6 +113,9 @@ EOF
   assert_contains 'trap cleanup EXIT' "$remote_script"
   assert_contains 'restore_needed=true' "$remote_script"
   assert_contains 'kubectl -n beach logs "$k6_pod" -c k6' "$remote_script"
+  assert_contains 'print "raw_json_start"' "$remote_script"
+  assert_contains 'print "raw_json_end"' "$remote_script"
+  assert_contains '/^\{"metric":/' "$remote_script"
   if grep -Fq 'kubectl -n beach exec "$k6_pod"' "$remote_script"; then
     fail 'completed k6 pod must not be accessed with kubectl exec'
   fi
