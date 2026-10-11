@@ -303,6 +303,7 @@ get nodes --no-headers
 get nodes -o wide
 -n kube-system rollout status daemonset/cilium --timeout=300s
 -n kube-system get pods -l k8s-app=cilium
+-n kube-system patch deployment coredns --type merge --patch {"spec":{"template":{"spec":{"nodeSelector":{"node-role":"app"},"topologySpreadConstraints":[{"maxSkew":1,"topologyKey":"kubernetes.io/hostname","whenUnsatisfiable":"ScheduleAnyway","labelSelector":{"matchLabels":{"k8s-app":"kube-dns"}}}]}}}}
 -n kube-system rollout status deployment/coredns --timeout=300s
 -n kube-system get pods -l k8s-app=kube-dns' "$kubectl_log"
 }
