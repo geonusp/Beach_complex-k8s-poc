@@ -29,6 +29,7 @@ test_loadtest_assets_are_pinned_and_scheduled() {
   assert_contains 'limits:' "$job"
   assert_contains 'cat /results/raw.json' "$job"
   assert_contains "executor: 'constant-arrival-rate'" "$script"
+  assert_contains "summaryTrendStats: ['avg', 'min', 'med', 'max', 'p(90)', 'p(95)', 'p(99)']" "$script"
   assert_contains 'name: BEACH_K6_DURATION' "$job"
   assert_contains '__ENV.BEACH_K6_DURATION' "$script"
   if grep -Fq 'name: K6_DURATION' "$job"; then
@@ -114,6 +115,8 @@ EOF
   assert_contains 'kubectl -n beach rollout status deployment/beach' "$remote_script"
   assert_contains 'kubectl -n beach set image deployment/beach beach="ghcr.io/example/beach:before"' "$remote_script"
   assert_contains 'endpointslice' "$remote_script"
+  assert_contains 'record_endpoints rollout-start' "$remote_script"
+  assert_contains 'record_endpoints during-rollout' "$remote_script"
   assert_contains "s/value: \"2m\"/value: \"331s\"/" "$remote_script"
   assert_contains 'trap cleanup EXIT' "$remote_script"
   assert_contains 'restore_needed=true' "$remote_script"
