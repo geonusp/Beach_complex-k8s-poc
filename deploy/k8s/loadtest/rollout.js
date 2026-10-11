@@ -11,6 +11,7 @@ export const status5xx = new Counter('beach_status_5xx');
 export const connectionFailures = new Counter('beach_connection_failures');
 
 export const options = {
+  summaryTrendStats: ['avg', 'min', 'med', 'max', 'p(90)', 'p(95)', 'p(99)'],
   scenarios: {
     rollout: {
       // VU 수가 아니라 초당 요청 수를 유지한다. 응답이 느려지면 k6가 VU를 늘려 요청률을 맞춘다.

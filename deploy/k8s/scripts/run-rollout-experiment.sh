@@ -85,7 +85,27 @@ record_endpoints before-rollout
 rollout_started="$(date +%s)"
 restore_needed=true
 kubectl -n __NAMESPACE__ set image deployment/__DEPLOYMENT__ beach="__IMAGE_B__"
-kubectl -n __NAMESPACE__ rollout status deployment/__DEPLOYMENT__ --timeout=__TIMEOUT__s
+record_endpoints rollout-start
+rollout_deadline=$((SECONDS + __TIMEOUT__))
+rollout_complete=false
+while (( SECONDS < rollout_deadline )); do
+  remaining_seconds=$((rollout_deadline - SECONDS))
+  poll_timeout_seconds=5
+  (( remaining_seconds < poll_timeout_seconds )) && poll_timeout_seconds="$remaining_seconds"
+  if kubectl -n __NAMESPACE__ rollout status deployment/__DEPLOYMENT__ --timeout="${poll_timeout_seconds}s" > "$work_dir/rollout-status.log" 2>&1; then
+    rollout_complete=true
+    break
+  fi
+  if ! grep -q 'timed out waiting for the condition' "$work_dir/rollout-status.log"; then
+    cat "$work_dir/rollout-status.log" >&2
+    exit 1
+  fi
+  record_endpoints during-rollout
+done
+if [[ "$rollout_complete" != true ]]; then
+  cat "$work_dir/rollout-status.log" >&2
+  exit 1
+fi
 rollout_finished="$(date +%s)"
 record_endpoints after-rollout
 sleep __OBSERVE__
