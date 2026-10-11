@@ -23,17 +23,23 @@ spec:
         - name: k6
           image: grafana/k6:2.3.0
           imagePullPolicy: IfNotPresent
+          command:
+            - /bin/sh
+            - -c
           args:
-            - run
-            - /scripts/rollout.js
-            - --out
-            - json=/results/raw.json
+            - |
+              k6 run /scripts/rollout.js --out json=/results/raw.json
+              k6_status=$?
+              if [ -f /results/raw.json ]; then
+                cat /results/raw.json
+              fi
+              exit "$k6_status"
           env:
             - name: BEACH_URL
               value: "http://beach.beach.svc.cluster.local"
             - name: K6_RATE
               value: "1"
-            - name: K6_DURATION
+            - name: BEACH_K6_DURATION
               value: "2m"
           resources:
             requests:
