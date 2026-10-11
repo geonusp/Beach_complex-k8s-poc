@@ -4,7 +4,7 @@ import { Counter } from 'k6/metrics';
 
 const beachUrl = (__ENV.BEACH_URL || 'http://beach.beach.svc.cluster.local').replace(/\/$/, '');
 const requestRate = Number(__ENV.K6_RATE || 1);
-const duration = __ENV.K6_DURATION || '2m';
+const duration = __ENV.BEACH_K6_DURATION || '2m';
 
 // Rolling update 중에도 일정한 도착률로 Beach API를 호출해 배포 중 요청 실패를 관찰한다.
 export const status5xx = new Counter('beach_status_5xx');

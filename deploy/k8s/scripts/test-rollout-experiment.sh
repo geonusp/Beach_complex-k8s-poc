@@ -29,6 +29,11 @@ test_loadtest_assets_are_pinned_and_scheduled() {
   assert_contains 'limits:' "$job"
   assert_contains 'cat /results/raw.json' "$job"
   assert_contains "executor: 'constant-arrival-rate'" "$script"
+  assert_contains 'name: BEACH_K6_DURATION' "$job"
+  assert_contains '__ENV.BEACH_K6_DURATION' "$script"
+  if grep -Fq 'name: K6_DURATION' "$job"; then
+    fail 'K6_DURATION overrides the k6 scenario configuration'
+  fi
   assert_contains '/api/beaches' "$script"
   assert_contains 'handleSummary' "$script"
 }
