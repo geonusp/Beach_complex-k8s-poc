@@ -290,7 +290,7 @@ test_bootstrap_verifies_expected_nodes_and_coredns() {
   cat > "$bin_dir/bash" <<'EOF'
 #!/bin/bash
 case "$1" in
-  */init-control-plane.sh|*/join-workers.sh|*/install-cilium.sh|*/label-nodes.sh) exit 0 ;;
+  */init-control-plane.sh|*/join-workers.sh|*/install-cilium.sh|*/label-nodes.sh|*/approve-kubelet-serving-csrs.sh) exit 0 ;;
   *) exec /bin/bash "$@" ;;
 esac
 EOF
@@ -374,6 +374,72 @@ test_python_is_checked_before_worker_join() {
   [[ $status -ne 0 ]] || fail 'join-workers.sh succeeded without python3'
   [[ "$(cat "$output_file")" == *'python3 is required but not installed'* ]] \
     || fail 'join-workers.sh did not report the missing python3 dependency'
+}
+
+write_fake_csr_kubectl() {
+  local bin_dir="$1"
+  cat > "$bin_dir/kubectl" <<'EOF'
+#!/usr/bin/env bash
+if [[ "$*" == 'get csr --no-headers'* ]]; then
+  cat "$CSR_LIST"
+else
+  printf '%s\n' "$*" >> "$KUBECTL_LOG"
+fi
+EOF
+  chmod +x "$bin_dir/kubectl"
+}
+
+test_only_known_kubelet_serving_csrs_are_approved() {
+  local bin_dir="$test_dir/csr-bin"
+  local parameters_file="$test_dir/csr-parameters"
+  local remote_script="$test_dir/csr-remote.sh"
+  local kubectl_log="$test_dir/kubectl-csr.log"
+  local csr_list="$test_dir/csr-list.txt"
+
+  write_fake_tools "$bin_dir"
+  write_fake_csr_kubectl "$bin_dir"
+  cat > "$csr_list" <<'EOF'
+csr-cp       kubernetes.io/kubelet-serving                 system:node:beach-complex-cp-1    <none>
+csr-app1     kubernetes.io/kubelet-serving                 system:node:beach-complex-app-1   Approved
+csr-app2     kubernetes.io/kubelet-serving                 system:node:beach-complex-app-2   <none>
+csr-obs      kubernetes.io/kubelet-serving                 system:node:beach-complex-obs-1   <none>
+csr-rogue    kubernetes.io/kubelet-serving                 system:node:intruder              <none>
+csr-client   kubernetes.io/kube-apiserver-client-kubelet   system:node:beach-complex-obs-1   <none>
+EOF
+
+  PATH="$bin_dir:$PATH" AWS_PARAMETERS_FILE="$parameters_file" \
+    KUBELET_CSR_POLL_INTERVAL_SECONDS=0 \
+    bash "$script_dir/approve-kubelet-serving-csrs.sh" >/dev/null
+  decode_remote_script "$parameters_file" "$remote_script"
+  PATH="$bin_dir:$PATH" KUBECTL_LOG="$kubectl_log" CSR_LIST="$csr_list" bash "$remote_script" >/dev/null
+
+  assert_file_equals 'certificate approve csr-cp
+certificate approve csr-app2
+certificate approve csr-obs
+get csr' "$kubectl_log"
+}
+
+test_missing_kubelet_serving_csr_fails_after_timeout() {
+  local bin_dir="$test_dir/csr-missing-bin"
+  local parameters_file="$test_dir/csr-missing-parameters"
+  local remote_script="$test_dir/csr-missing-remote.sh"
+  local csr_list="$test_dir/csr-missing-list.txt"
+
+  write_fake_tools "$bin_dir"
+  write_fake_csr_kubectl "$bin_dir"
+  cat > "$csr_list" <<'EOF'
+csr-cp       kubernetes.io/kubelet-serving                 system:node:beach-complex-cp-1    Approved
+EOF
+
+  PATH="$bin_dir:$PATH" AWS_PARAMETERS_FILE="$parameters_file" \
+    KUBELET_CSR_TIMEOUT_SECONDS=0 KUBELET_CSR_POLL_INTERVAL_SECONDS=0 \
+    bash "$script_dir/approve-kubelet-serving-csrs.sh" >/dev/null
+  decode_remote_script "$parameters_file" "$remote_script"
+
+  if PATH="$bin_dir:$PATH" KUBECTL_LOG="$test_dir/kubectl-csr-missing.log" CSR_LIST="$csr_list" \
+    bash "$remote_script" >/dev/null 2>&1; then
+    fail 'CSR approval succeeded although worker CSRs were missing'
+  fi
 }
 
 test_ghcr_secret_is_rehydrated_from_ssm() {
@@ -526,6 +592,8 @@ main() {
   test_bootstrap_verifies_expected_nodes_and_coredns
   test_cilium_existing_install_is_reconciled_and_verified
   test_python_is_checked_before_worker_join
+  test_only_known_kubelet_serving_csrs_are_approved
+  test_missing_kubelet_serving_csr_fails_after_timeout
   test_ghcr_secret_is_rehydrated_from_ssm
   test_ghcr_secret_script_bootstraps_remote_aws_cli
   test_dependencies_are_applied_on_the_control_plane
