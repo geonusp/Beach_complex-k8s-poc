@@ -1,0 +1,1030 @@
+2026-10-13T05:44:05Z Starting Redis-dependent readiness experiment
+clientVersion:
+  buildDate: "2026-09-23T17:10:05Z"
+  compiler: gc
+  gitCommit: ad950d1cc78b0183c476bd4d3f1934c104229727
+  gitTreeState: clean
+  gitVersion: v1.36.5
+  goVersion: go1.26.8
+  major: "1"
+  minor: "36"
+  platform: linux/amd64
+kustomizeVersion: v5.8.1
+serverVersion:
+  buildDate: "2026-09-23T17:07:02Z"
+  compiler: gc
+  emulationMajor: "1"
+  emulationMinor: "36"
+  gitCommit: ad950d1cc78b0183c476bd4d3f1934c104229727
+  gitTreeState: clean
+  gitVersion: v1.36.5
+  goVersion: go1.26.8
+  major: "1"
+  minCompatibilityMajor: "1"
+  minCompatibilityMinor: "35"
+  minor: "36"
+  platform: linux/amd64
+
+2026-10-13T05:44:05Z phase=before
+NAME    READY   UP-TO-DATE   AVAILABLE   AGE     CONTAINERS   IMAGES                                                 SELECTOR
+beach   2/2     2            2           2d11h   beach        ghcr.io/geonusp/beach_complex-k8s-poc-backend:latest   app.kubernetes.io/component=backend,app.kubernetes.io/name=beach
+redis   1/1     1            1           2d11h   redis        redis:7-alpine                                         app.kubernetes.io/name=redis
+NAME                     READY   STATUS    RESTARTS   AGE   IP             NODE                  NOMINATED NODE   READINESS GATES
+beach-5d79ddb666-5c4p9   1/1     Running   0          31h   10.244.0.121   beach-complex-app-2   <none>           <none>
+beach-5d79ddb666-gfhps   1/1     Running   0          31h   10.244.1.5     beach-complex-app-1   <none>           <none>
+apiVersion: v1
+items:
+- addressType: IPv4
+  apiVersion: discovery.k8s.io/v1
+  endpoints:
+  - addresses:
+    - 10.244.0.121
+    conditions:
+      ready: true
+      serving: true
+      terminating: false
+    nodeName: beach-complex-app-2
+    targetRef:
+      kind: Pod
+      name: beach-5d79ddb666-5c4p9
+      namespace: beach
+      uid: d65736b8-433b-4b25-96c3-7b0403adf8ad
+  - addresses:
+    - 10.244.1.5
+    conditions:
+      ready: true
+      serving: true
+      terminating: false
+    nodeName: beach-complex-app-1
+    targetRef:
+      kind: Pod
+      name: beach-5d79ddb666-gfhps
+      namespace: beach
+      uid: ebc6a498-fb68-4fc5-9baa-80aee8eb14c9
+  kind: EndpointSlice
+  metadata:
+    annotations:
+      endpoints.kubernetes.io/last-change-trigger-time: "2026-10-11T21:47:41Z"
+    creationTimestamp: "2026-10-10T17:48:09Z"
+    generateName: beach-
+    generation: 157
+    labels:
+      app.kubernetes.io/component: backend
+      app.kubernetes.io/name: beach
+      app.kubernetes.io/part-of: beach-complex
+      endpointslice.kubernetes.io/managed-by: endpointslice-controller.k8s.io
+      kubernetes.io/service-name: beach
+    name: beach-94qvx
+    namespace: beach
+    ownerReferences:
+    - apiVersion: v1
+      blockOwnerDeletion: true
+      controller: true
+      kind: Service
+      name: beach
+      uid: 20d8a4e8-5aad-4252-b1a3-081465e9e7f5
+    resourceVersion: "226687"
+    uid: 8440f61f-080f-4d09-8218-b5760330c342
+  ports:
+  - name: http
+    port: 8080
+    protocol: TCP
+kind: List
+metadata:
+  resourceVersion: ""
+apiVersion: v1
+items:
+- apiVersion: apps/v1
+  kind: Deployment
+  metadata:
+    annotations:
+      deployment.kubernetes.io/revision: "20"
+      kubectl.kubernetes.io/last-applied-configuration: |
+        {"apiVersion":"apps/v1","kind":"Deployment","metadata":{"annotations":{},"labels":{"app.kubernetes.io/component":"backend","app.kubernetes.io/name":"beach","app.kubernetes.io/part-of":"beach-complex"},"name":"beach","namespace":"beach"},"spec":{"replicas":2,"selector":{"matchLabels":{"app.kubernetes.io/component":"backend","app.kubernetes.io/name":"beach"}},"strategy":{"rollingUpdate":{"maxSurge":1,"maxUnavailable":0},"type":"RollingUpdate"},"template":{"metadata":{"labels":{"app.kubernetes.io/component":"backend","app.kubernetes.io/name":"beach","app.kubernetes.io/part-of":"beach-complex"}},"spec":{"containers":[{"envFrom":[{"configMapRef":{"name":"beach-runtime"}},{"secretRef":{"name":"beach-runtime"}}],"image":"ghcr.io/geonusp/beach_complex-k8s-poc-backend:latest","imagePullPolicy":"IfNotPresent","lifecycle":{"preStop":{"sleep":{"seconds":10}}},"livenessProbe":{"failureThreshold":3,"httpGet":{"path":"/actuator/health/liveness","port":"management"},"periodSeconds":20,"timeoutSeconds":3},"name":"beach","ports":[{"containerPort":8080,"name":"http"},{"containerPort":8081,"name":"management"}],"readinessProbe":{"failureThreshold":3,"httpGet":{"path":"/actuator/health/readiness","port":"management"},"periodSeconds":10,"timeoutSeconds":3},"resources":{"limits":{"cpu":"1","memory":"1Gi"},"requests":{"cpu":"250m","memory":"512Mi"}},"startupProbe":{"failureThreshold":30,"httpGet":{"path":"/actuator/health/liveness","port":"management"},"periodSeconds":10}}],"imagePullSecrets":[{"name":"ghcr-pull"}],"nodeSelector":{"node-role":"app"},"terminationGracePeriodSeconds":40,"topologySpreadConstraints":[{"labelSelector":{"matchLabels":{"app.kubernetes.io/component":"backend","app.kubernetes.io/name":"beach"}},"maxSkew":1,"topologyKey":"kubernetes.io/hostname","whenUnsatisfiable":"DoNotSchedule"}]}}}}
+    creationTimestamp: "2026-10-10T17:48:09Z"
+    generation: 20
+    labels:
+      app.kubernetes.io/component: backend
+      app.kubernetes.io/name: beach
+      app.kubernetes.io/part-of: beach-complex
+    name: beach
+    namespace: beach
+    resourceVersion: "226689"
+    uid: 7b47b9d3-11cb-47d0-955c-75271e1a76ef
+  spec:
+    progressDeadlineSeconds: 600
+    replicas: 2
+    revisionHistoryLimit: 10
+    selector:
+      matchLabels:
+        app.kubernetes.io/component: backend
+        app.kubernetes.io/name: beach
+    strategy:
+      rollingUpdate:
+        maxSurge: 1
+        maxUnavailable: 0
+      type: RollingUpdate
+    template:
+      metadata:
+        annotations:
+          kubectl.kubernetes.io/restartedAt: "2026-10-10T17:48:09Z"
+        labels:
+          app.kubernetes.io/component: backend
+          app.kubernetes.io/name: beach
+          app.kubernetes.io/part-of: beach-complex
+      spec:
+        containers:
+        - envFrom:
+          - configMapRef:
+              name: beach-runtime
+          - secretRef:
+              name: beach-runtime
+          image: ghcr.io/geonusp/beach_complex-k8s-poc-backend:latest
+          imagePullPolicy: IfNotPresent
+          lifecycle:
+            preStop:
+              sleep:
+                seconds: 10
+          livenessProbe:
+            failureThreshold: 3
+            httpGet:
+              path: /actuator/health/liveness
+              port: management
+              scheme: HTTP
+            periodSeconds: 20
+            successThreshold: 1
+            timeoutSeconds: 3
+          name: beach
+          ports:
+          - containerPort: 8080
+            name: http
+            protocol: TCP
+          - containerPort: 8081
+            name: management
+            protocol: TCP
+          readinessProbe:
+            failureThreshold: 3
+            httpGet:
+              path: /actuator/health/readiness
+              port: management
+              scheme: HTTP
+            periodSeconds: 10
+            successThreshold: 1
+            timeoutSeconds: 3
+          resources:
+            limits:
+              cpu: "1"
+              memory: 1Gi
+            requests:
+              cpu: 250m
+              memory: 512Mi
+          startupProbe:
+            failureThreshold: 30
+            httpGet:
+              path: /actuator/health/liveness
+              port: management
+              scheme: HTTP
+            periodSeconds: 10
+            successThreshold: 1
+            timeoutSeconds: 1
+          terminationMessagePath: /dev/termination-log
+          terminationMessagePolicy: File
+        dnsPolicy: ClusterFirst
+        imagePullSecrets:
+        - name: ghcr-pull
+        nodeSelector:
+          node-role: app
+        restartPolicy: Always
+        schedulerName: default-scheduler
+        securityContext: {}
+        terminationGracePeriodSeconds: 40
+        topologySpreadConstraints:
+        - labelSelector:
+            matchLabels:
+              app.kubernetes.io/component: backend
+              app.kubernetes.io/name: beach
+          maxSkew: 1
+          topologyKey: kubernetes.io/hostname
+          whenUnsatisfiable: DoNotSchedule
+  status:
+    availableReplicas: 2
+    conditions:
+    - lastTransitionTime: "2026-10-10T17:49:21Z"
+      lastUpdateTime: "2026-10-10T17:49:21Z"
+      message: Deployment has minimum availability.
+      reason: MinimumReplicasAvailable
+      status: "True"
+      type: Available
+    - lastTransitionTime: "2026-10-10T17:48:09Z"
+      lastUpdateTime: "2026-10-11T21:47:31Z"
+      message: ReplicaSet "beach-5d79ddb666" has successfully progressed.
+      reason: NewReplicaSetAvailable
+      status: "True"
+      type: Progressing
+    observedGeneration: 20
+    readyReplicas: 2
+    replicas: 2
+    terminatingReplicas: 0
+    updatedReplicas: 2
+- apiVersion: apps/v1
+  kind: Deployment
+  metadata:
+    annotations:
+      deployment.kubernetes.io/revision: "1"
+      kubectl.kubernetes.io/last-applied-configuration: |
+        {"apiVersion":"apps/v1","kind":"Deployment","metadata":{"annotations":{},"labels":{"app.kubernetes.io/component":"cache","app.kubernetes.io/name":"redis","app.kubernetes.io/part-of":"beach-complex"},"name":"redis","namespace":"beach"},"spec":{"replicas":1,"selector":{"matchLabels":{"app.kubernetes.io/name":"redis"}},"template":{"metadata":{"labels":{"app.kubernetes.io/component":"cache","app.kubernetes.io/name":"redis","app.kubernetes.io/part-of":"beach-complex"}},"spec":{"affinity":{"podAntiAffinity":{"requiredDuringSchedulingIgnoredDuringExecution":[{"labelSelector":{"matchLabels":{"app.kubernetes.io/name":"postgres"}},"topologyKey":"kubernetes.io/hostname"}]}},"containers":[{"image":"redis:7-alpine","name":"redis","ports":[{"containerPort":6379,"name":"redis"}],"readinessProbe":{"exec":{"command":["redis-cli","ping"]},"failureThreshold":12,"periodSeconds":5,"timeoutSeconds":3},"resources":{"limits":{"cpu":"250m","memory":"256Mi"},"requests":{"cpu":"50m","memory":"64Mi"}}}],"nodeSelector":{"node-role":"app"}}}}}
+    creationTimestamp: "2026-10-10T17:47:43Z"
+    generation: 1
+    labels:
+      app.kubernetes.io/component: cache
+      app.kubernetes.io/name: redis
+      app.kubernetes.io/part-of: beach-complex
+    name: redis
+    namespace: beach
+    resourceVersion: "1246"
+    uid: ca5186d5-cb9d-41b9-aa2a-644a426f904e
+  spec:
+    progressDeadlineSeconds: 600
+    replicas: 1
+    revisionHistoryLimit: 10
+    selector:
+      matchLabels:
+        app.kubernetes.io/name: redis
+    strategy:
+      rollingUpdate:
+        maxSurge: 25%
+        maxUnavailable: 25%
+      type: RollingUpdate
+    template:
+      metadata:
+        labels:
+          app.kubernetes.io/component: cache
+          app.kubernetes.io/name: redis
+          app.kubernetes.io/part-of: beach-complex
+      spec:
+        affinity:
+          podAntiAffinity:
+            requiredDuringSchedulingIgnoredDuringExecution:
+            - labelSelector:
+                matchLabels:
+                  app.kubernetes.io/name: postgres
+              topologyKey: kubernetes.io/hostname
+        containers:
+        - image: redis:7-alpine
+          imagePullPolicy: IfNotPresent
+          name: redis
+          ports:
+          - containerPort: 6379
+            name: redis
+            protocol: TCP
+          readinessProbe:
+            exec:
+              command:
+              - redis-cli
+              - ping
+            failureThreshold: 12
+            periodSeconds: 5
+            successThreshold: 1
+            timeoutSeconds: 3
+          resources:
+            limits:
+              cpu: 250m
+              memory: 256Mi
+            requests:
+              cpu: 50m
+              memory: 64Mi
+          terminationMessagePath: /dev/termination-log
+          terminationMessagePolicy: File
+        dnsPolicy: ClusterFirst
+        nodeSelector:
+          node-role: app
+        restartPolicy: Always
+        schedulerName: default-scheduler
+        securityContext: {}
+        terminationGracePeriodSeconds: 30
+  status:
+    availableReplicas: 1
+    conditions:
+    - lastTransitionTime: "2026-10-10T17:47:45Z"
+      lastUpdateTime: "2026-10-10T17:47:45Z"
+      message: Deployment has minimum availability.
+      reason: MinimumReplicasAvailable
+      status: "True"
+      type: Available
+    - lastTransitionTime: "2026-10-10T17:47:43Z"
+      lastUpdateTime: "2026-10-10T17:47:45Z"
+      message: ReplicaSet "redis-c4fb5bd98" has successfully progressed.
+      reason: NewReplicaSetAvailable
+      status: "True"
+      type: Progressing
+    observedGeneration: 1
+    readyReplicas: 1
+    replicas: 1
+    terminatingReplicas: 0
+    updatedReplicas: 1
+kind: List
+metadata:
+  resourceVersion: ""
+2026-10-13T05:44:06Z original_redis_replicas=1
+2026-10-13T05:44:06Z scaling Redis to zero
+deployment.apps/redis scaled
+2026-10-13T05:44:06Z phase=during
+NAME    READY   UP-TO-DATE   AVAILABLE   AGE     CONTAINERS   IMAGES                                                 SELECTOR
+beach   2/2     2            2           2d11h   beach        ghcr.io/geonusp/beach_complex-k8s-poc-backend:latest   app.kubernetes.io/component=backend,app.kubernetes.io/name=beach
+redis   0/0     0            0           2d11h   redis        redis:7-alpine                                         app.kubernetes.io/name=redis
+NAME                     READY   STATUS    RESTARTS   AGE   IP             NODE                  NOMINATED NODE   READINESS GATES
+beach-5d79ddb666-5c4p9   1/1     Running   0          31h   10.244.0.121   beach-complex-app-2   <none>           <none>
+beach-5d79ddb666-gfhps   1/1     Running   0          31h   10.244.1.5     beach-complex-app-1   <none>           <none>
+apiVersion: v1
+items:
+- addressType: IPv4
+  apiVersion: discovery.k8s.io/v1
+  endpoints:
+  - addresses:
+    - 10.244.0.121
+    conditions:
+      ready: true
+      serving: true
+      terminating: false
+    nodeName: beach-complex-app-2
+    targetRef:
+      kind: Pod
+      name: beach-5d79ddb666-5c4p9
+      namespace: beach
+      uid: d65736b8-433b-4b25-96c3-7b0403adf8ad
+  - addresses:
+    - 10.244.1.5
+    conditions:
+      ready: true
+      serving: true
+      terminating: false
+    nodeName: beach-complex-app-1
+    targetRef:
+      kind: Pod
+      name: beach-5d79ddb666-gfhps
+      namespace: beach
+      uid: ebc6a498-fb68-4fc5-9baa-80aee8eb14c9
+  kind: EndpointSlice
+  metadata:
+    annotations:
+      endpoints.kubernetes.io/last-change-trigger-time: "2026-10-11T21:47:41Z"
+    creationTimestamp: "2026-10-10T17:48:09Z"
+    generateName: beach-
+    generation: 157
+    labels:
+      app.kubernetes.io/component: backend
+      app.kubernetes.io/name: beach
+      app.kubernetes.io/part-of: beach-complex
+      endpointslice.kubernetes.io/managed-by: endpointslice-controller.k8s.io
+      kubernetes.io/service-name: beach
+    name: beach-94qvx
+    namespace: beach
+    ownerReferences:
+    - apiVersion: v1
+      blockOwnerDeletion: true
+      controller: true
+      kind: Service
+      name: beach
+      uid: 20d8a4e8-5aad-4252-b1a3-081465e9e7f5
+    resourceVersion: "226687"
+    uid: 8440f61f-080f-4d09-8218-b5760330c342
+  ports:
+  - name: http
+    port: 8080
+    protocol: TCP
+kind: List
+metadata:
+  resourceVersion: ""
+2026-10-13T05:44:09Z phase=during
+NAME    READY   UP-TO-DATE   AVAILABLE   AGE     CONTAINERS   IMAGES                                                 SELECTOR
+beach   2/2     2            2           2d11h   beach        ghcr.io/geonusp/beach_complex-k8s-poc-backend:latest   app.kubernetes.io/component=backend,app.kubernetes.io/name=beach
+redis   0/0     0            0           2d11h   redis        redis:7-alpine                                         app.kubernetes.io/name=redis
+NAME                     READY   STATUS    RESTARTS   AGE   IP             NODE                  NOMINATED NODE   READINESS GATES
+beach-5d79ddb666-5c4p9   1/1     Running   0          31h   10.244.0.121   beach-complex-app-2   <none>           <none>
+beach-5d79ddb666-gfhps   1/1     Running   0          31h   10.244.1.5     beach-complex-app-1   <none>           <none>
+apiVersion: v1
+items:
+- addressType: IPv4
+  apiVersion: discovery.k8s.io/v1
+  endpoints:
+  - addresses:
+    - 10.244.0.121
+    conditions:
+      ready: true
+      serving: true
+      terminating: false
+    nodeName: beach-complex-app-2
+    targetRef:
+      kind: Pod
+      name: beach-5d79ddb666-5c4p9
+      namespace: beach
+      uid: d65736b8-433b-4b25-96c3-7b0403adf8ad
+  - addresses:
+    - 10.244.1.5
+    conditions:
+      ready: true
+      serving: true
+      terminating: false
+    nodeName: beach-complex-app-1
+    targetRef:
+      kind: Pod
+      name: beach-5d79ddb666-gfhps
+      namespace: beach
+      uid: ebc6a498-fb68-4fc5-9baa-80aee8eb14c9
+  kind: EndpointSlice
+  metadata:
+    annotations:
+      endpoints.kubernetes.io/last-change-trigger-time: "2026-10-11T21:47:41Z"
+    creationTimestamp: "2026-10-10T17:48:09Z"
+    generateName: beach-
+    generation: 157
+    labels:
+      app.kubernetes.io/component: backend
+      app.kubernetes.io/name: beach
+      app.kubernetes.io/part-of: beach-complex
+      endpointslice.kubernetes.io/managed-by: endpointslice-controller.k8s.io
+      kubernetes.io/service-name: beach
+    name: beach-94qvx
+    namespace: beach
+    ownerReferences:
+    - apiVersion: v1
+      blockOwnerDeletion: true
+      controller: true
+      kind: Service
+      name: beach
+      uid: 20d8a4e8-5aad-4252-b1a3-081465e9e7f5
+    resourceVersion: "226687"
+    uid: 8440f61f-080f-4d09-8218-b5760330c342
+  ports:
+  - name: http
+    port: 8080
+    protocol: TCP
+kind: List
+metadata:
+  resourceVersion: ""
+2026-10-13T05:44:13Z phase=during
+NAME    READY   UP-TO-DATE   AVAILABLE   AGE     CONTAINERS   IMAGES                                                 SELECTOR
+beach   2/2     2            2           2d11h   beach        ghcr.io/geonusp/beach_complex-k8s-poc-backend:latest   app.kubernetes.io/component=backend,app.kubernetes.io/name=beach
+redis   0/0     0            0           2d11h   redis        redis:7-alpine                                         app.kubernetes.io/name=redis
+NAME                     READY   STATUS    RESTARTS   AGE   IP             NODE                  NOMINATED NODE   READINESS GATES
+beach-5d79ddb666-5c4p9   1/1     Running   0          31h   10.244.0.121   beach-complex-app-2   <none>           <none>
+beach-5d79ddb666-gfhps   1/1     Running   0          31h   10.244.1.5     beach-complex-app-1   <none>           <none>
+apiVersion: v1
+items:
+- addressType: IPv4
+  apiVersion: discovery.k8s.io/v1
+  endpoints:
+  - addresses:
+    - 10.244.0.121
+    conditions:
+      ready: true
+      serving: true
+      terminating: false
+    nodeName: beach-complex-app-2
+    targetRef:
+      kind: Pod
+      name: beach-5d79ddb666-5c4p9
+      namespace: beach
+      uid: d65736b8-433b-4b25-96c3-7b0403adf8ad
+  - addresses:
+    - 10.244.1.5
+    conditions:
+      ready: true
+      serving: true
+      terminating: false
+    nodeName: beach-complex-app-1
+    targetRef:
+      kind: Pod
+      name: beach-5d79ddb666-gfhps
+      namespace: beach
+      uid: ebc6a498-fb68-4fc5-9baa-80aee8eb14c9
+  kind: EndpointSlice
+  metadata:
+    annotations:
+      endpoints.kubernetes.io/last-change-trigger-time: "2026-10-11T21:47:41Z"
+    creationTimestamp: "2026-10-10T17:48:09Z"
+    generateName: beach-
+    generation: 157
+    labels:
+      app.kubernetes.io/component: backend
+      app.kubernetes.io/name: beach
+      app.kubernetes.io/part-of: beach-complex
+      endpointslice.kubernetes.io/managed-by: endpointslice-controller.k8s.io
+      kubernetes.io/service-name: beach
+    name: beach-94qvx
+    namespace: beach
+    ownerReferences:
+    - apiVersion: v1
+      blockOwnerDeletion: true
+      controller: true
+      kind: Service
+      name: beach
+      uid: 20d8a4e8-5aad-4252-b1a3-081465e9e7f5
+    resourceVersion: "226687"
+    uid: 8440f61f-080f-4d09-8218-b5760330c342
+  ports:
+  - name: http
+    port: 8080
+    protocol: TCP
+kind: List
+metadata:
+  resourceVersion: ""
+2026-10-13T05:44:16Z phase=during
+NAME    READY   UP-TO-DATE   AVAILABLE   AGE     CONTAINERS   IMAGES                                                 SELECTOR
+beach   2/2     2            2           2d11h   beach        ghcr.io/geonusp/beach_complex-k8s-poc-backend:latest   app.kubernetes.io/component=backend,app.kubernetes.io/name=beach
+redis   0/0     0            0           2d11h   redis        redis:7-alpine                                         app.kubernetes.io/name=redis
+NAME                     READY   STATUS    RESTARTS   AGE   IP             NODE                  NOMINATED NODE   READINESS GATES
+beach-5d79ddb666-5c4p9   1/1     Running   0          31h   10.244.0.121   beach-complex-app-2   <none>           <none>
+beach-5d79ddb666-gfhps   1/1     Running   0          31h   10.244.1.5     beach-complex-app-1   <none>           <none>
+apiVersion: v1
+items:
+- addressType: IPv4
+  apiVersion: discovery.k8s.io/v1
+  endpoints:
+  - addresses:
+    - 10.244.0.121
+    conditions:
+      ready: true
+      serving: true
+      terminating: false
+    nodeName: beach-complex-app-2
+    targetRef:
+      kind: Pod
+      name: beach-5d79ddb666-5c4p9
+      namespace: beach
+      uid: d65736b8-433b-4b25-96c3-7b0403adf8ad
+  - addresses:
+    - 10.244.1.5
+    conditions:
+      ready: true
+      serving: true
+      terminating: false
+    nodeName: beach-complex-app-1
+    targetRef:
+      kind: Pod
+      name: beach-5d79ddb666-gfhps
+      namespace: beach
+      uid: ebc6a498-fb68-4fc5-9baa-80aee8eb14c9
+  kind: EndpointSlice
+  metadata:
+    annotations:
+      endpoints.kubernetes.io/last-change-trigger-time: "2026-10-11T21:47:41Z"
+    creationTimestamp: "2026-10-10T17:48:09Z"
+    generateName: beach-
+    generation: 157
+    labels:
+      app.kubernetes.io/component: backend
+      app.kubernetes.io/name: beach
+      app.kubernetes.io/part-of: beach-complex
+      endpointslice.kubernetes.io/managed-by: endpointslice-controller.k8s.io
+      kubernetes.io/service-name: beach
+    name: beach-94qvx
+    namespace: beach
+    ownerReferences:
+    - apiVersion: v1
+      blockOwnerDeletion: true
+      controller: true
+      kind: Service
+      name: beach
+      uid: 20d8a4e8-5aad-4252-b1a3-081465e9e7f5
+    resourceVersion: "226687"
+    uid: 8440f61f-080f-4d09-8218-b5760330c342
+  ports:
+  - name: http
+    port: 8080
+    protocol: TCP
+kind: List
+metadata:
+  resourceVersion: ""
+2026-10-13T05:44:20Z phase=during
+NAME    READY   UP-TO-DATE   AVAILABLE   AGE     CONTAINERS   IMAGES                                                 SELECTOR
+beach   2/2     2            2           2d11h   beach        ghcr.io/geonusp/beach_complex-k8s-poc-backend:latest   app.kubernetes.io/component=backend,app.kubernetes.io/name=beach
+redis   0/0     0            0           2d11h   redis        redis:7-alpine                                         app.kubernetes.io/name=redis
+NAME                     READY   STATUS    RESTARTS   AGE   IP             NODE                  NOMINATED NODE   READINESS GATES
+beach-5d79ddb666-5c4p9   1/1     Running   0          31h   10.244.0.121   beach-complex-app-2   <none>           <none>
+beach-5d79ddb666-gfhps   1/1     Running   0          31h   10.244.1.5     beach-complex-app-1   <none>           <none>
+apiVersion: v1
+items:
+- addressType: IPv4
+  apiVersion: discovery.k8s.io/v1
+  endpoints:
+  - addresses:
+    - 10.244.0.121
+    conditions:
+      ready: true
+      serving: true
+      terminating: false
+    nodeName: beach-complex-app-2
+    targetRef:
+      kind: Pod
+      name: beach-5d79ddb666-5c4p9
+      namespace: beach
+      uid: d65736b8-433b-4b25-96c3-7b0403adf8ad
+  - addresses:
+    - 10.244.1.5
+    conditions:
+      ready: true
+      serving: true
+      terminating: false
+    nodeName: beach-complex-app-1
+    targetRef:
+      kind: Pod
+      name: beach-5d79ddb666-gfhps
+      namespace: beach
+      uid: ebc6a498-fb68-4fc5-9baa-80aee8eb14c9
+  kind: EndpointSlice
+  metadata:
+    annotations:
+      endpoints.kubernetes.io/last-change-trigger-time: "2026-10-11T21:47:41Z"
+    creationTimestamp: "2026-10-10T17:48:09Z"
+    generateName: beach-
+    generation: 157
+    labels:
+      app.kubernetes.io/component: backend
+      app.kubernetes.io/name: beach
+      app.kubernetes.io/part-of: beach-complex
+      endpointslice.kubernetes.io/managed-by: endpointslice-controller.k8s.io
+      kubernetes.io/service-name: beach
+    name: beach-94qvx
+    namespace: beach
+    ownerReferences:
+    - apiVersion: v1
+      blockOwnerDeletion: true
+      controller: true
+      kind: Service
+      name: beach
+      uid: 20d8a4e8-5aad-4252-b1a3-081465e9e7f5
+    resourceVersion: "226687"
+    uid: 8440f61f-080f-4d09-8218-b5760330c342
+  ports:
+  - name: http
+    port: 8080
+    protocol: TCP
+kind: List
+metadata:
+  resourceVersion: ""
+2026-10-13T05:44:23Z phase=during
+NAME    READY   UP-TO-DATE   AVAILABLE   AGE     CONTAINERS   IMAGES                                                 SELECTOR
+beach   2/2     2            2           2d11h   beach        ghcr.io/geonusp/beach_complex-k8s-poc-backend:latest   app.kubernetes.io/component=backend,app.kubernetes.io/name=beach
+redis   0/0     0            0           2d11h   redis        redis:7-alpine                                         app.kubernetes.io/name=redis
+NAME                     READY   STATUS    RESTARTS   AGE   IP             NODE                  NOMINATED NODE   READINESS GATES
+beach-5d79ddb666-5c4p9   1/1     Running   0          31h   10.244.0.121   beach-complex-app-2   <none>           <none>
+beach-5d79ddb666-gfhps   1/1     Running   0          31h   10.244.1.5     beach-complex-app-1   <none>           <none>
+apiVersion: v1
+items:
+- addressType: IPv4
+  apiVersion: discovery.k8s.io/v1
+  endpoints:
+  - addresses:
+    - 10.244.0.121
+    conditions:
+      ready: true
+      serving: true
+      terminating: false
+    nodeName: beach-complex-app-2
+    targetRef:
+      kind: Pod
+      name: beach-5d79ddb666-5c4p9
+      namespace: beach
+      uid: d65736b8-433b-4b25-96c3-7b0403adf8ad
+  - addresses:
+    - 10.244.1.5
+    conditions:
+      ready: true
+      serving: true
+      terminating: false
+    nodeName: beach-complex-app-1
+    targetRef:
+      kind: Pod
+      name: beach-5d79ddb666-gfhps
+      namespace: beach
+      uid: ebc6a498-fb68-4fc5-9baa-80aee8eb14c9
+  kind: EndpointSlice
+  metadata:
+    annotations:
+      endpoints.kubernetes.io/last-change-trigger-time: "2026-10-11T21:47:41Z"
+    creationTimestamp: "2026-10-10T17:48:09Z"
+    generateName: beach-
+    generation: 157
+    labels:
+      app.kubernetes.io/component: backend
+      app.kubernetes.io/name: beach
+      app.kubernetes.io/part-of: beach-complex
+      endpointslice.kubernetes.io/managed-by: endpointslice-controller.k8s.io
+      kubernetes.io/service-name: beach
+    name: beach-94qvx
+    namespace: beach
+    ownerReferences:
+    - apiVersion: v1
+      blockOwnerDeletion: true
+      controller: true
+      kind: Service
+      name: beach
+      uid: 20d8a4e8-5aad-4252-b1a3-081465e9e7f5
+    resourceVersion: "226687"
+    uid: 8440f61f-080f-4d09-8218-b5760330c342
+  ports:
+  - name: http
+    port: 8080
+    protocol: TCP
+kind: List
+metadata:
+  resourceVersion: ""
+2026-10-13T05:44:26Z phase=during
+NAME    READY   UP-TO-DATE   AVAILABLE   AGE     CONTAINERS   IMAGES                                                 SELECTOR
+beach   2/2     2            2           2d11h   beach        ghcr.io/geonusp/beach_complex-k8s-poc-backend:latest   app.kubernetes.io/component=backend,app.kubernetes.io/name=beach
+redis   0/0     0            0           2d11h   redis        redis:7-alpine                                         app.kubernetes.io/name=redis
+NAME                     READY   STATUS    RESTARTS   AGE   IP             NODE                  NOMINATED NODE   READINESS GATES
+beach-5d79ddb666-5c4p9   1/1     Running   0          31h   10.244.0.121   beach-complex-app-2   <none>           <none>
+beach-5d79ddb666-gfhps   1/1     Running   0          31h   10.244.1.5     beach-complex-app-1   <none>           <none>
+apiVersion: v1
+items:
+- addressType: IPv4
+  apiVersion: discovery.k8s.io/v1
+  endpoints:
+  - addresses:
+    - 10.244.0.121
+    conditions:
+      ready: true
+      serving: true
+      terminating: false
+    nodeName: beach-complex-app-2
+    targetRef:
+      kind: Pod
+      name: beach-5d79ddb666-5c4p9
+      namespace: beach
+      uid: d65736b8-433b-4b25-96c3-7b0403adf8ad
+  - addresses:
+    - 10.244.1.5
+    conditions:
+      ready: true
+      serving: true
+      terminating: false
+    nodeName: beach-complex-app-1
+    targetRef:
+      kind: Pod
+      name: beach-5d79ddb666-gfhps
+      namespace: beach
+      uid: ebc6a498-fb68-4fc5-9baa-80aee8eb14c9
+  kind: EndpointSlice
+  metadata:
+    annotations:
+      endpoints.kubernetes.io/last-change-trigger-time: "2026-10-11T21:47:41Z"
+    creationTimestamp: "2026-10-10T17:48:09Z"
+    generateName: beach-
+    generation: 157
+    labels:
+      app.kubernetes.io/component: backend
+      app.kubernetes.io/name: beach
+      app.kubernetes.io/part-of: beach-complex
+      endpointslice.kubernetes.io/managed-by: endpointslice-controller.k8s.io
+      kubernetes.io/service-name: beach
+    name: beach-94qvx
+    namespace: beach
+    ownerReferences:
+    - apiVersion: v1
+      blockOwnerDeletion: true
+      controller: true
+      kind: Service
+      name: beach
+      uid: 20d8a4e8-5aad-4252-b1a3-081465e9e7f5
+    resourceVersion: "226687"
+    uid: 8440f61f-080f-4d09-8218-b5760330c342
+  ports:
+  - name: http
+    port: 8080
+    protocol: TCP
+kind: List
+metadata:
+  resourceVersion: ""
+2026-10-13T05:44:30Z phase=during
+NAME    READY   UP-TO-DATE   AVAILABLE   AGE     CONTAINERS   IMAGES                                                 SELECTOR
+beach   2/2     2            2           2d11h   beach        ghcr.io/geonusp/beach_complex-k8s-poc-backend:latest   app.kubernetes.io/component=backend,app.kubernetes.io/name=beach
+redis   0/0     0            0           2d11h   redis        redis:7-alpine                                         app.kubernetes.io/name=redis
+NAME                     READY   STATUS    RESTARTS   AGE   IP             NODE                  NOMINATED NODE   READINESS GATES
+beach-5d79ddb666-5c4p9   1/1     Running   0          31h   10.244.0.121   beach-complex-app-2   <none>           <none>
+beach-5d79ddb666-gfhps   1/1     Running   0          31h   10.244.1.5     beach-complex-app-1   <none>           <none>
+apiVersion: v1
+items:
+- addressType: IPv4
+  apiVersion: discovery.k8s.io/v1
+  endpoints:
+  - addresses:
+    - 10.244.0.121
+    conditions:
+      ready: true
+      serving: true
+      terminating: false
+    nodeName: beach-complex-app-2
+    targetRef:
+      kind: Pod
+      name: beach-5d79ddb666-5c4p9
+      namespace: beach
+      uid: d65736b8-433b-4b25-96c3-7b0403adf8ad
+  - addresses:
+    - 10.244.1.5
+    conditions:
+      ready: true
+      serving: true
+      terminating: false
+    nodeName: beach-complex-app-1
+    targetRef:
+      kind: Pod
+      name: beach-5d79ddb666-gfhps
+      namespace: beach
+      uid: ebc6a498-fb68-4fc5-9baa-80aee8eb14c9
+  kind: EndpointSlice
+  metadata:
+    annotations:
+      endpoints.kubernetes.io/last-change-trigger-time: "2026-10-11T21:47:41Z"
+    creationTimestamp: "2026-10-10T17:48:09Z"
+    generateName: beach-
+    generation: 157
+    labels:
+      app.kubernetes.io/component: backend
+      app.kubernetes.io/name: beach
+      app.kubernetes.io/part-of: beach-complex
+      endpointslice.kubernetes.io/managed-by: endpointslice-controller.k8s.io
+      kubernetes.io/service-name: beach
+    name: beach-94qvx
+    namespace: beach
+    ownerReferences:
+    - apiVersion: v1
+      blockOwnerDeletion: true
+      controller: true
+      kind: Service
+      name: beach
+      uid: 20d8a4e8-5aad-4252-b1a3-081465e9e7f5
+    resourceVersion: "226687"
+    uid: 8440f61f-080f-4d09-8218-b5760330c342
+  ports:
+  - name: http
+    port: 8080
+    protocol: TCP
+kind: List
+metadata:
+  resourceVersion: ""
+2026-10-13T05:44:33Z phase=during
+NAME    READY   UP-TO-DATE   AVAILABLE   AGE     CONTAINERS   IMAGES                                                 SELECTOR
+beach   0/2     2            0           2d11h   beach        ghcr.io/geonusp/beach_complex-k8s-poc-backend:latest   app.kubernetes.io/component=backend,app.kubernetes.io/name=beach
+redis   0/0     0            0           2d11h   redis        redis:7-alpine                                         app.kubernetes.io/name=redis
+NAME                     READY   STATUS    RESTARTS   AGE   IP             NODE                  NOMINATED NODE   READINESS GATES
+beach-5d79ddb666-5c4p9   0/1     Running   0          31h   10.244.0.121   beach-complex-app-2   <none>           <none>
+beach-5d79ddb666-gfhps   0/1     Running   0          31h   10.244.1.5     beach-complex-app-1   <none>           <none>
+apiVersion: v1
+items:
+- addressType: IPv4
+  apiVersion: discovery.k8s.io/v1
+  endpoints:
+  - addresses:
+    - 10.244.0.121
+    conditions:
+      ready: false
+      serving: false
+      terminating: false
+    nodeName: beach-complex-app-2
+    targetRef:
+      kind: Pod
+      name: beach-5d79ddb666-5c4p9
+      namespace: beach
+      uid: d65736b8-433b-4b25-96c3-7b0403adf8ad
+  - addresses:
+    - 10.244.1.5
+    conditions:
+      ready: false
+      serving: false
+      terminating: false
+    nodeName: beach-complex-app-1
+    targetRef:
+      kind: Pod
+      name: beach-5d79ddb666-gfhps
+      namespace: beach
+      uid: ebc6a498-fb68-4fc5-9baa-80aee8eb14c9
+  kind: EndpointSlice
+  metadata:
+    annotations:
+      endpoints.kubernetes.io/last-change-trigger-time: "2026-10-13T05:44:32Z"
+    creationTimestamp: "2026-10-10T17:48:09Z"
+    generateName: beach-
+    generation: 159
+    labels:
+      app.kubernetes.io/component: backend
+      app.kubernetes.io/name: beach
+      app.kubernetes.io/part-of: beach-complex
+      endpointslice.kubernetes.io/managed-by: endpointslice-controller.k8s.io
+      kubernetes.io/service-name: beach
+    name: beach-94qvx
+    namespace: beach
+    ownerReferences:
+    - apiVersion: v1
+      blockOwnerDeletion: true
+      controller: true
+      kind: Service
+      name: beach
+      uid: 20d8a4e8-5aad-4252-b1a3-081465e9e7f5
+    resourceVersion: "480734"
+    uid: 8440f61f-080f-4d09-8218-b5760330c342
+  ports:
+  - name: http
+    port: 8080
+    protocol: TCP
+kind: List
+metadata:
+  resourceVersion: ""
+2026-10-13T05:44:34Z Both Beach Pods are unready and no ready endpoints remain
+2026-10-13T05:44:34Z failure_observed=true
+2026-10-13T05:44:34Z restoring Redis replicas=1
+deployment.apps/redis scaled
+Waiting for deployment "redis" rollout to finish: 0 of 1 updated replicas are available...
+deployment "redis" successfully rolled out
+2026-10-13T05:44:45Z phase=after
+NAME    READY   UP-TO-DATE   AVAILABLE   AGE     CONTAINERS   IMAGES                                                 SELECTOR
+beach   2/2     2            2           2d11h   beach        ghcr.io/geonusp/beach_complex-k8s-poc-backend:latest   app.kubernetes.io/component=backend,app.kubernetes.io/name=beach
+redis   1/1     1            1           2d11h   redis        redis:7-alpine                                         app.kubernetes.io/name=redis
+NAME                     READY   STATUS    RESTARTS   AGE   IP             NODE                  NOMINATED NODE   READINESS GATES
+beach-5d79ddb666-5c4p9   1/1     Running   0          31h   10.244.0.121   beach-complex-app-2   <none>           <none>
+beach-5d79ddb666-gfhps   1/1     Running   0          31h   10.244.1.5     beach-complex-app-1   <none>           <none>
+apiVersion: v1
+items:
+- addressType: IPv4
+  apiVersion: discovery.k8s.io/v1
+  endpoints:
+  - addresses:
+    - 10.244.0.121
+    conditions:
+      ready: true
+      serving: true
+      terminating: false
+    nodeName: beach-complex-app-2
+    targetRef:
+      kind: Pod
+      name: beach-5d79ddb666-5c4p9
+      namespace: beach
+      uid: d65736b8-433b-4b25-96c3-7b0403adf8ad
+  - addresses:
+    - 10.244.1.5
+    conditions:
+      ready: true
+      serving: true
+      terminating: false
+    nodeName: beach-complex-app-1
+    targetRef:
+      kind: Pod
+      name: beach-5d79ddb666-gfhps
+      namespace: beach
+      uid: ebc6a498-fb68-4fc5-9baa-80aee8eb14c9
+  kind: EndpointSlice
+  metadata:
+    annotations:
+      endpoints.kubernetes.io/last-change-trigger-time: "2026-10-13T05:44:42Z"
+    creationTimestamp: "2026-10-10T17:48:09Z"
+    generateName: beach-
+    generation: 161
+    labels:
+      app.kubernetes.io/component: backend
+      app.kubernetes.io/name: beach
+      app.kubernetes.io/part-of: beach-complex
+      endpointslice.kubernetes.io/managed-by: endpointslice-controller.k8s.io
+      kubernetes.io/service-name: beach
+    name: beach-94qvx
+    namespace: beach
+    ownerReferences:
+    - apiVersion: v1
+      blockOwnerDeletion: true
+      controller: true
+      kind: Service
+      name: beach
+      uid: 20d8a4e8-5aad-4252-b1a3-081465e9e7f5
+    resourceVersion: "480794"
+    uid: 8440f61f-080f-4d09-8218-b5760330c342
+  ports:
+  - name: http
+    port: 8080
+    protocol: TCP
+kind: List
+metadata:
+  resourceVersion: ""
+2026-10-13T05:44:45Z Redis, Beach Pods and ready endpoints recovered
+[pod/beach-5d79ddb666-5c4p9/beach] {"@timestamp":"2026-10-13T05:44:06.603486181Z","@version":"1","message":"Reconnecting, last destination was redis/10.104.226.117:6379","logger":"io.lettuce.core.protocol.ConnectionWatchdog","thread":"lettuce-eventExecutorLoop-1-1","level":"INFO"}
+[pod/beach-5d79ddb666-5c4p9/beach] {"@timestamp":"2026-10-13T05:44:06.619484659Z","@version":"1","message":"Cannot reconnect to [redis/<unresolved>:6379]: Connection refused: redis/10.104.226.117:6379","logger":"io.lettuce.core.protocol.ConnectionWatchdog","thread":"lettuce-nioEventLoop-4-2","level":"WARN"}
+[pod/beach-5d79ddb666-5c4p9/beach] {"@timestamp":"2026-10-13T05:44:16.890058042Z","@version":"1","message":"Reconnecting, last destination was redis/<unresolved>:6379","logger":"io.lettuce.core.protocol.ConnectionWatchdog","thread":"lettuce-eventExecutorLoop-1-2","level":"INFO"}
+[pod/beach-5d79ddb666-5c4p9/beach] {"@timestamp":"2026-10-13T05:44:26.901382989Z","@version":"1","message":"Cannot reconnect to [redis/<unresolved>:6379]: connection timed out after 10000 ms: redis/10.104.226.117:6379","logger":"io.lettuce.core.protocol.ConnectionWatchdog","thread":"lettuce-nioEventLoop-4-1","level":"WARN"}
+[pod/beach-5d79ddb666-5c4p9/beach] {"@timestamp":"2026-10-13T05:44:26.990482425Z","@version":"1","message":"Reconnecting, last destination was redis/<unresolved>:6379","logger":"io.lettuce.core.protocol.ConnectionWatchdog","thread":"lettuce-eventExecutorLoop-1-1","level":"INFO"}
+[pod/beach-5d79ddb666-5c4p9/beach] {"@timestamp":"2026-10-13T05:44:37.001480124Z","@version":"1","message":"Cannot reconnect to [redis/<unresolved>:6379]: connection timed out after 10000 ms: redis/10.104.226.117:6379","logger":"io.lettuce.core.protocol.ConnectionWatchdog","thread":"lettuce-nioEventLoop-4-2","level":"WARN"}
+[pod/beach-5d79ddb666-5c4p9/beach] {"@timestamp":"2026-10-13T05:44:37.090229345Z","@version":"1","message":"Reconnecting, last destination was redis/<unresolved>:6379","logger":"io.lettuce.core.protocol.ConnectionWatchdog","thread":"lettuce-eventExecutorLoop-1-2","level":"INFO"}
+[pod/beach-5d79ddb666-5c4p9/beach] {"@timestamp":"2026-10-13T05:44:37.099139209Z","@version":"1","message":"Reconnected to redis/<unresolved>:6379","logger":"io.lettuce.core.protocol.ReconnectionHandler","thread":"lettuce-nioEventLoop-4-1","level":"INFO"}
+[pod/beach-5d79ddb666-5c4p9/beach] {"@timestamp":"2026-10-13T05:44:37.104702701Z","@version":"1","message":"Health contributor org.springframework.boot.actuate.autoconfigure.health.HealthEndpointConfiguration$AdaptedReactiveHealthContributors$1 (redis) took 19419ms to respond","logger":"org.springframework.boot.actuate.health.HealthEndpointSupport","thread":"http-nio-8081-exec-2","level":"WARN","traceId":"5c4e6131370a09fcd637dcb2c58c7e59","spanId":"f66317a18e88f8b9"}
+[pod/beach-5d79ddb666-5c4p9/beach] {"@timestamp":"2026-10-13T05:44:37.104995775Z","@version":"1","message":"Health contributor org.springframework.boot.actuate.autoconfigure.health.HealthEndpointConfiguration$AdaptedReactiveHealthContributors$1 (redis) took 29418ms to respond","logger":"org.springframework.boot.actuate.health.HealthEndpointSupport","thread":"http-nio-8081-exec-10","level":"WARN","traceId":"a6abd5c7466a0b5f59044e9ddfaffb87","spanId":"6b88aae961e19f4a"}
+[pod/beach-5d79ddb666-gfhps/beach] {"@timestamp":"2026-10-13T05:44:06.625840593Z","@version":"1","message":"Reconnecting, last destination was redis/10.104.226.117:6379","logger":"io.lettuce.core.protocol.ConnectionWatchdog","thread":"lettuce-eventExecutorLoop-1-1","level":"INFO"}
+[pod/beach-5d79ddb666-gfhps/beach] {"@timestamp":"2026-10-13T05:44:06.640069316Z","@version":"1","message":"Cannot reconnect to [redis/<unresolved>:6379]: Connection refused: redis/10.104.226.117:6379","logger":"io.lettuce.core.protocol.ConnectionWatchdog","thread":"lettuce-nioEventLoop-4-2","level":"WARN"}
+[pod/beach-5d79ddb666-gfhps/beach] {"@timestamp":"2026-10-13T05:44:16.917010937Z","@version":"1","message":"Reconnecting, last destination was redis/<unresolved>:6379","logger":"io.lettuce.core.protocol.ConnectionWatchdog","thread":"lettuce-eventExecutorLoop-1-2","level":"INFO"}
+[pod/beach-5d79ddb666-gfhps/beach] {"@timestamp":"2026-10-13T05:44:26.92711652Z","@version":"1","message":"Cannot reconnect to [redis/<unresolved>:6379]: connection timed out after 10000 ms: redis/10.104.226.117:6379","logger":"io.lettuce.core.protocol.ConnectionWatchdog","thread":"lettuce-nioEventLoop-4-1","level":"WARN"}
+[pod/beach-5d79ddb666-gfhps/beach] {"@timestamp":"2026-10-13T05:44:27.01766867Z","@version":"1","message":"Reconnecting, last destination was redis/<unresolved>:6379","logger":"io.lettuce.core.protocol.ConnectionWatchdog","thread":"lettuce-eventExecutorLoop-1-1","level":"INFO"}
+[pod/beach-5d79ddb666-gfhps/beach] {"@timestamp":"2026-10-13T05:44:37.027649196Z","@version":"1","message":"Cannot reconnect to [redis/<unresolved>:6379]: connection timed out after 10000 ms: redis/10.104.226.117:6379","logger":"io.lettuce.core.protocol.ConnectionWatchdog","thread":"lettuce-nioEventLoop-4-2","level":"WARN"}
+[pod/beach-5d79ddb666-gfhps/beach] {"@timestamp":"2026-10-13T05:44:37.117180629Z","@version":"1","message":"Reconnecting, last destination was redis/<unresolved>:6379","logger":"io.lettuce.core.protocol.ConnectionWatchdog","thread":"lettuce-eventExecutorLoop-1-2","level":"INFO"}
+[pod/beach-5d79ddb666-gfhps/beach] {"@timestamp":"2026-10-13T05:44:37.127776478Z","@version":"1","message":"Reconnected to redis/<unresolved>:6379","logger":"io.lettuce.core.protocol.ReconnectionHandler","thread":"lettuce-nioEventLoop-4-1","level":"INFO"}
+[pod/beach-5d79ddb666-gfhps/beach] {"@timestamp":"2026-10-13T05:44:37.131387407Z","@version":"1","message":"Health contributor org.springframework.boot.actuate.autoconfigure.health.HealthEndpointConfiguration$AdaptedReactiveHealthContributors$1 (redis) took 17380ms to respond","logger":"org.springframework.boot.actuate.health.HealthEndpointSupport","thread":"http-nio-8081-exec-4","level":"WARN","traceId":"9addc3f8fe98d8f8c07ef250084fa085","spanId":"ac28865fc6b5b9ba"}
+[pod/beach-5d79ddb666-gfhps/beach] {"@timestamp":"2026-10-13T05:44:37.133663032Z","@version":"1","message":"Health contributor org.springframework.boot.actuate.autoconfigure.health.HealthEndpointConfiguration$AdaptedReactiveHealthContributors$1 (redis) took 27379ms to respond","logger":"org.springframework.boot.actuate.health.HealthEndpointSupport","thread":"http-nio-8081-exec-1","level":"WARN","traceId":"29fe4a79a5f5765b148fbdc8f2381d7f","spanId":"7ef3931e9cf0731a"}
+2026-10-13T05:44:45Z PASS: readiness failure, endpoint exclusion and recovery observed
+2026-10-13T05:44:45Z exit_status=0
+readiness_exit_status=0
