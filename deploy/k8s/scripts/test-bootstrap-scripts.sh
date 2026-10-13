@@ -236,11 +236,12 @@ EOF
     || fail 'incomplete control plane did not report a recovery-oriented error'
 }
 
-test_pod_cidr_override_reaches_kubeadm() {
-  local bin_dir="$test_dir/cidr-bin"
-  local parameters_file="$test_dir/cidr-parameters"
-  local remote_script="$test_dir/cidr-remote.sh"
+test_kubeadm_config_enables_kubelet_serving_tls() {
+  local bin_dir="$test_dir/kubeadm-config-bin"
+  local parameters_file="$test_dir/kubeadm-config-parameters"
+  local remote_script="$test_dir/kubeadm-config-remote.sh"
   local kubeadm_log="$test_dir/kubeadm.log"
+  local config_capture="$test_dir/kubeadm-config.yaml"
 
   write_fake_tools "$bin_dir"
   cat > "$bin_dir/hostnamectl" <<'EOF'
@@ -250,6 +251,7 @@ EOF
   cat > "$bin_dir/kubeadm" <<'EOF'
 #!/usr/bin/env bash
 printf '%s\n' "$*" >> "$KUBEADM_LOG"
+cp "${@: -1}" "$KUBEADM_CONFIG_CAPTURE"
 EOF
   cat > "$bin_dir/install" <<'EOF'
 #!/usr/bin/env bash
@@ -264,10 +266,18 @@ EOF
   PATH="$bin_dir:$PATH" AWS_PARAMETERS_FILE="$parameters_file" \
     POD_NETWORK_CIDR=10.245.0.0/16 bash "$script_dir/init-control-plane.sh" >/dev/null
   decode_remote_script "$parameters_file" "$remote_script"
-  PATH="$bin_dir:$PATH" KUBEADM_LOG="$kubeadm_log" bash "$remote_script"
+  PATH="$bin_dir:$PATH" KUBEADM_LOG="$kubeadm_log" KUBEADM_CONFIG_CAPTURE="$config_capture" \
+    bash "$remote_script"
 
-  [[ "$(cat "$kubeadm_log")" == *'--pod-network-cidr 10.245.0.0/16'* ]] \
-    || fail 'POD_NETWORK_CIDR did not reach kubeadm'
+  assert_file_equals 'init --config /tmp/kubeadm-config.yaml' "$kubeadm_log"
+  grep -Fxq '  advertiseAddress: 10.0.1.10' "$config_capture" \
+    || fail 'control plane IP did not reach the kubeadm config'
+  grep -Fxq '  name: beach-complex-cp-1' "$config_capture" \
+    || fail 'node name did not reach the kubeadm config'
+  grep -Fxq '  podSubnet: 10.245.0.0/16' "$config_capture" \
+    || fail 'POD_NETWORK_CIDR did not reach the kubeadm config'
+  grep -Fxq 'serverTLSBootstrap: true' "$config_capture" \
+    || fail 'kubelet serving TLS bootstrap is not enabled'
 }
 
 test_bootstrap_verifies_expected_nodes_and_coredns() {
@@ -511,7 +521,7 @@ main() {
   test_ssm_waits_for_in_progress_command
   test_existing_control_plane_restores_admin_kubeconfig
   test_incomplete_control_plane_is_rejected
-  test_pod_cidr_override_reaches_kubeadm
+  test_kubeadm_config_enables_kubelet_serving_tls
   test_control_plane_keeps_node_selector_role_empty
   test_bootstrap_verifies_expected_nodes_and_coredns
   test_cilium_existing_install_is_reconciled_and_verified
