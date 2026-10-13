@@ -659,6 +659,55 @@ test_observability_values_fit_the_observability_node() {
   grep -Fxq '      path: /actuator/prometheus' "$podmonitor" || fail 'PodMonitor path is wrong'
 }
 
+run_install_observability() {
+  local name="$1"
+  local secret_exists="$2"
+  local bin_dir="$test_dir/$name-bin"
+  local parameters_file="$test_dir/$name-parameters"
+  local remote_script="$test_dir/$name-remote.sh"
+
+  write_fake_tools "$bin_dir"
+  cat > "$bin_dir/helm" <<'EOF'
+#!/usr/bin/env bash
+printf '%s\n' "$*" >> "$HELM_LOG"
+EOF
+  cat > "$bin_dir/kubectl" <<'EOF'
+#!/usr/bin/env bash
+printf '%s\n' "$*" >> "$KUBECTL_LOG"
+if [[ "$*" == '-n monitoring get secret grafana-admin' ]]; then
+  [[ "$GRAFANA_SECRET_EXISTS" == 'true' ]]
+fi
+EOF
+  chmod +x "$bin_dir/helm" "$bin_dir/kubectl"
+
+  PATH="$bin_dir:$PATH" AWS_PARAMETERS_FILE="$parameters_file" \
+    bash "$script_dir/install-observability.sh" >/dev/null
+  decode_remote_script "$parameters_file" "$remote_script"
+  PATH="$bin_dir:$PATH" HELM_LOG="$test_dir/$name-helm.log" KUBECTL_LOG="$test_dir/$name-kubectl.log" \
+    GRAFANA_SECRET_EXISTS="$secret_exists" bash "$remote_script" >/dev/null
+}
+
+test_observability_stack_is_installed_with_generated_grafana_secret() {
+  run_install_observability observability-new false
+
+  assert_file_equals 'repo add prometheus-community https://prometheus-community.github.io/helm-charts --force-update
+repo update
+upgrade --install kube-prometheus-stack prometheus-community/kube-prometheus-stack --version 91.9.0 --namespace monitoring --values /tmp/kube-prometheus-stack-values.yaml --wait --timeout 10m' \
+    "$test_dir/observability-new-helm.log"
+  grep -Eq '^-n monitoring create secret generic grafana-admin --from-literal=admin-user=admin --from-literal=admin-password=.{20,}$' \
+    "$test_dir/observability-new-kubectl.log" || fail 'Grafana admin Secret was not generated'
+  grep -Fxq 'apply -f /tmp/beach-podmonitor.yaml' "$test_dir/observability-new-kubectl.log" \
+    || fail 'Beach PodMonitor was not applied'
+}
+
+test_observability_rerun_keeps_grafana_secret() {
+  run_install_observability observability-rerun true
+
+  if grep -Fq 'create secret' "$test_dir/observability-rerun-kubectl.log"; then
+    fail 'existing Grafana admin Secret was replaced'
+  fi
+}
+
 test_kubeconfig_files_are_ignored() {
   git -C "$repo_root" check-ignore -q kubeconfig \
     || fail 'kubeconfig is not ignored'
@@ -668,18 +717,19 @@ test_kubeconfig_files_are_ignored() {
 
 test_provision_and_deploy_runs_steps_in_order() {
   local script="$repo_root/deploy/k8s/scripts/provision-and-deploy.sh"
-  local apply_line bootstrap_line ghcr_line dependencies_line beach_line destroy_line
+  local apply_line bootstrap_line ghcr_line dependencies_line beach_line observability_line destroy_line
 
   apply_line="$(grep -nF 'terraform -chdir=' "$script" | grep -F 'apply -auto-approve' | cut -d: -f1)"
   bootstrap_line="$(grep -nF 'bootstrap-cluster.sh' "$script" | head -n1 | cut -d: -f1)"
   ghcr_line="$(grep -nF 'sync-ghcr-secret.sh' "$script" | head -n1 | cut -d: -f1)"
   dependencies_line="$(grep -nF 'deploy-dependencies.sh' "$script" | head -n1 | cut -d: -f1)"
   beach_line="$(grep -nF 'deploy-beach.sh' "$script" | head -n1 | cut -d: -f1)"
+  observability_line="$(grep -nF 'install-observability.sh' "$script" | head -n1 | cut -d: -f1)"
   destroy_line="$(grep -nF 'destroy' "$script" | head -n1 | cut -d: -f1)"
 
-  [[ -n "$apply_line" && -n "$bootstrap_line" && -n "$ghcr_line" && -n "$dependencies_line" && -n "$beach_line" ]] \
+  [[ -n "$apply_line" && -n "$bootstrap_line" && -n "$ghcr_line" && -n "$dependencies_line" && -n "$beach_line" && -n "$observability_line" ]] \
     || fail 'provision-and-deploy.sh is missing a required deployment step'
-  ((apply_line < bootstrap_line && bootstrap_line < ghcr_line && ghcr_line < dependencies_line && dependencies_line < beach_line)) \
+  ((apply_line < bootstrap_line && bootstrap_line < ghcr_line && ghcr_line < dependencies_line && dependencies_line < beach_line && beach_line < observability_line)) \
     || fail 'provision-and-deploy.sh deployment steps are out of order'
   [[ -n "$destroy_line" ]] || fail 'provision-and-deploy.sh does not provide the destroy path'
 }
@@ -710,6 +760,8 @@ main() {
   test_beach_deployment_creates_runtime_secret_and_rolls_out
   test_management_port_is_not_exposed_outside_pods
   test_observability_values_fit_the_observability_node
+  test_observability_stack_is_installed_with_generated_grafana_secret
+  test_observability_rerun_keeps_grafana_secret
   test_kubeconfig_files_are_ignored
   test_provision_and_deploy_runs_steps_in_order
   printf 'PASS bootstrap script tests\n'

@@ -34,20 +34,23 @@ EOF
 }
 
 provision_and_deploy() {
-  log 'step 1/5 terraform apply'
+  log 'step 1/6 terraform apply'
   terraform -chdir="$terraform_environment" apply -auto-approve
 
-  log 'step 2/5 bootstrap kubeadm and Cilium'
+  log 'step 2/6 bootstrap kubeadm and Cilium'
   bash "$script_dir/bootstrap-cluster.sh"
 
-  log 'step 3/5 restore GHCR pull secret'
+  log 'step 3/6 restore GHCR pull secret'
   bash "$script_dir/sync-ghcr-secret.sh"
 
-  log 'step 4/5 deploy PostgreSQL and Redis'
+  log 'step 4/6 deploy PostgreSQL and Redis'
   bash "$script_dir/deploy-dependencies.sh"
 
-  log 'step 5/5 deploy Beach'
+  log 'step 5/6 deploy Beach'
   bash "$script_dir/deploy-beach.sh"
+
+  log 'step 6/6 deploy Prometheus and Grafana'
+  bash "$script_dir/install-observability.sh"
 
   log 'provision and deployment completed'
 }
