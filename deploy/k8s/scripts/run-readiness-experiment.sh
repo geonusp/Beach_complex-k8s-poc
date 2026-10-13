@@ -1,16 +1,27 @@
 #!/usr/bin/env bash
-# Run on the Control Plane: sudo bash run-readiness-experiment.sh
-# Requires an idle development cluster with Redis in the readiness health group.
+# Run locally from the repository root; SSM executes the experiment on the CP.
 set -Eeuo pipefail
-export KUBECONFIG="${KUBECONFIG:-/root/.kube/config}"
+source "$(dirname "${BASH_SOURCE[0]}")/lib/ssm.sh"
 
+main() {
+  require_tools
+  local control_plane_id results_bucket label result_dir remote_script exit_status
+  control_plane_id="$(terraform_output control_plane_instance_id)"
+  results_bucket="$(terraform_output experiment_results_bucket_name)"
+  label="$(date -u +%Y%m%dT%H%M%SZ)-$$"
+  result_dir="${BEACH_READINESS_RESULT_DIR:-$repo_root/deploy/k8s/loadtest/results/readiness}/$label"
+  mkdir -p "$result_dir"
+
+  remote_script="$(cat <<'REMOTE'
+# Preserve failure evidence through SSM/S3 while reporting the test status below.
+set +e
+(
+set -Eeuo pipefail
+export KUBECONFIG=/root/.kube/config
 readonly pod_selector='app.kubernetes.io/name=beach'
 readonly slice_selector='kubernetes.io/service-name=beach'
-readonly result_dir="readiness-results/$(date -u +%Y%m%dT%H%M%SZ)-$$"
 k=(kubectl --request-timeout=5s -n beach)
 restore_needed=false
-mkdir -p "$result_dir"
-exec > >(tee "$result_dir/experiment.log") 2>&1
 
 log() { printf '%s %s\n' "$(date -u +%Y-%m-%dT%H:%M:%SZ)" "$*"; }
 
@@ -60,7 +71,7 @@ cleanup() {
       status=1
     fi
   fi
-  log "exit_status=$status; evidence=$result_dir"
+  log "exit_status=$status"
   exit "$status"
 }
 trap cleanup EXIT
@@ -104,3 +115,23 @@ fi
 "${k[@]}" logs -l "$pod_selector" --all-containers --prefix --since=5m || true
 [[ "$failure_observed" == true ]] || { log 'FAIL: readiness failure and endpoint exclusion were not observed within 90 seconds'; exit 1; }
 log 'PASS: readiness failure, endpoint exclusion and recovery observed'
+)
+status=$?
+printf 'readiness_exit_status=%s\n' "$status"
+exit 0
+REMOTE
+)"
+
+  log "running readiness experiment on $control_plane_id; results: $result_dir"
+  # Reuse the existing rollout/* S3 permission for full, untruncated output.
+  if ! ssm_run "$control_plane_id" "$remote_script" "$results_bucket" "rollout/readiness/$label" > "$result_dir/remote-output.txt" 2> "$result_dir/ssm-error.txt"; then
+    cat "$result_dir/ssm-error.txt" >&2
+    fail "SSM execution or output retrieval failed; results: $result_dir"
+  fi
+  exit_status="$(awk -F= '/^readiness_exit_status=/ {status=$2} END {print status}' "$result_dir/remote-output.txt")"
+  [[ "$exit_status" =~ ^[0-9]+$ ]] || fail "experiment status is missing; results: $result_dir"
+  [[ "$exit_status" == 0 ]] || fail "readiness experiment failed (exit $exit_status); results: $result_dir"
+  log "readiness experiment passed; results: $result_dir"
+}
+
+main "$@"
