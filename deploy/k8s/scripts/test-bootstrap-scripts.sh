@@ -620,6 +620,15 @@ EOF
     || fail 'Beach deployment rollout was not verified'
 }
 
+test_management_port_is_not_exposed_outside_pods() {
+  if grep -Eq '8081|management' "$repo_root/deploy/k8s/app/service.yaml"; then
+    fail 'Beach Service must not expose the management port'
+  fi
+  if grep -Fq 'actuator' "$repo_root/deploy/k8s/app/ingress.yaml"; then
+    fail 'Beach Ingress must not route actuator paths'
+  fi
+}
+
 test_kubeconfig_files_are_ignored() {
   git -C "$repo_root" check-ignore -q kubeconfig \
     || fail 'kubeconfig is not ignored'
@@ -669,6 +678,7 @@ main() {
   test_ghcr_secret_script_bootstraps_remote_aws_cli
   test_dependencies_are_applied_on_the_control_plane
   test_beach_deployment_creates_runtime_secret_and_rolls_out
+  test_management_port_is_not_exposed_outside_pods
   test_kubeconfig_files_are_ignored
   test_provision_and_deploy_runs_steps_in_order
   printf 'PASS bootstrap script tests\n'
