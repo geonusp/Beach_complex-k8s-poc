@@ -1,0 +1,5 @@
+# kubectl top과 HPA가 쓰는 metrics.k8s.io 제공자. 관측 노드에 둔다.
+# kubelet serving 인증서는 serverTLSBootstrap으로 클러스터 CA가 발급하므로
+# kubelet 인증서 검증을 끄는 옵션을 쓰지 않는다.
+nodeSelector:
+  node-role: observability
