@@ -290,7 +290,7 @@ test_bootstrap_verifies_expected_nodes_and_coredns() {
   cat > "$bin_dir/bash" <<'EOF'
 #!/bin/bash
 case "$1" in
-  */init-control-plane.sh|*/join-workers.sh|*/install-cilium.sh|*/label-nodes.sh|*/approve-kubelet-serving-csrs.sh) exit 0 ;;
+  */init-control-plane.sh|*/join-workers.sh|*/install-cilium.sh|*/label-nodes.sh|*/approve-kubelet-serving-csrs.sh|*/install-metrics-server.sh) exit 0 ;;
   *) exec /bin/bash "$@" ;;
 esac
 EOF
@@ -354,6 +354,46 @@ upgrade --install cilium cilium/cilium --version 1.20.2 --namespace kube-system 
   assert_file_equals '-n kube-system rollout status daemonset/cilium --timeout=300s' "$kubectl_log"
   grep -q -- '- 10.245.0.0/16' "$values_capture" \
     || fail 'POD_NETWORK_CIDR did not reach the Cilium values'
+}
+
+test_metrics_server_is_installed_on_observability_node() {
+  local bin_dir="$test_dir/metrics-server-bin"
+  local parameters_file="$test_dir/metrics-server-parameters"
+  local remote_script="$test_dir/metrics-server-remote.sh"
+  local helm_log="$test_dir/helm-metrics-server.log"
+  local kubectl_log="$test_dir/kubectl-metrics-server.log"
+  local values_capture="$test_dir/metrics-server-values.yaml"
+
+  write_fake_tools "$bin_dir"
+  cat > "$bin_dir/helm" <<'EOF'
+#!/usr/bin/env bash
+printf '%s\n' "$*" >> "$HELM_LOG"
+if [[ "$1 $2" == 'upgrade --install' ]]; then
+  cp /tmp/metrics-server-values.yaml "$VALUES_CAPTURE"
+fi
+EOF
+  cat > "$bin_dir/kubectl" <<'EOF'
+#!/usr/bin/env bash
+printf '%s\n' "$*" >> "$KUBECTL_LOG"
+EOF
+  chmod +x "$bin_dir/helm" "$bin_dir/kubectl"
+
+  PATH="$bin_dir:$PATH" AWS_PARAMETERS_FILE="$parameters_file" \
+    bash "$script_dir/install-metrics-server.sh" >/dev/null
+  decode_remote_script "$parameters_file" "$remote_script"
+  PATH="$bin_dir:$PATH" HELM_LOG="$helm_log" KUBECTL_LOG="$kubectl_log" \
+    VALUES_CAPTURE="$values_capture" bash "$remote_script"
+
+  assert_file_equals 'repo add metrics-server https://kubernetes-sigs.github.io/metrics-server/ --force-update
+repo update
+upgrade --install metrics-server metrics-server/metrics-server --version 3.14.0 --namespace kube-system --values /tmp/metrics-server-values.yaml' "$helm_log"
+  assert_file_equals '-n kube-system rollout status deployment/metrics-server --timeout=300s
+wait --for=condition=Available apiservice/v1beta1.metrics.k8s.io --timeout=300s' "$kubectl_log"
+  grep -Fxq '  node-role: observability' "$values_capture" \
+    || fail 'Metrics Server is not pinned to the observability node'
+  if grep -Fq 'kubelet-insecure-tls' "$values_capture"; then
+    fail 'Metrics Server must not disable kubelet TLS verification'
+  fi
 }
 
 test_python_is_checked_before_worker_join() {
@@ -624,6 +664,7 @@ main() {
   test_only_known_kubelet_serving_csrs_are_approved
   test_missing_kubelet_serving_csr_fails_after_timeout
   test_rerun_accepts_kubelets_with_issued_certificates
+  test_metrics_server_is_installed_on_observability_node
   test_ghcr_secret_is_rehydrated_from_ssm
   test_ghcr_secret_script_bootstraps_remote_aws_cli
   test_dependencies_are_applied_on_the_control_plane

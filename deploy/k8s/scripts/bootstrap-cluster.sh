@@ -24,20 +24,23 @@ print(" ".join(f"node/{hostname}" for hostname in hostnames.values()))
   expected_node_count="${node_data%%$'\n'*}"
   expected_nodes="${node_data#*$'\n'}"
 
-  log "step 1/5 control plane"
+  log "step 1/6 control plane"
   bash "$script_dir/init-control-plane.sh"
 
-  log "step 2/5 workers"
+  log "step 2/6 workers"
   bash "$script_dir/join-workers.sh"
 
-  log "step 3/5 cilium"
+  log "step 3/6 cilium"
   bash "$script_dir/install-cilium.sh"
 
-  log "step 4/5 node labels"
+  log "step 4/6 node labels"
   bash "$script_dir/label-nodes.sh"
 
-  log "step 5/5 kubelet serving certificates"
+  log "step 5/6 kubelet serving certificates"
   bash "$script_dir/approve-kubelet-serving-csrs.sh"
+
+  log "step 6/6 metrics-server"
+  bash "$script_dir/install-metrics-server.sh"
 
   log "verifying cluster"
   ssm_run "$(terraform_output control_plane_instance_id)" "
