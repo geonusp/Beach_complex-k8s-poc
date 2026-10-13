@@ -629,6 +629,36 @@ test_management_port_is_not_exposed_outside_pods() {
   fi
 }
 
+assert_yaml_component_disabled() {
+  local component="$1"
+  local values_file="$2"
+
+  grep -A1 -x "$component:" "$values_file" | grep -Fxq '  enabled: false' \
+    || fail "$component is not disabled in $values_file"
+}
+
+test_observability_values_fit_the_observability_node() {
+  local values="$repo_root/deploy/k8s/observability/kube-prometheus-stack-values.yaml"
+  local podmonitor="$repo_root/deploy/k8s/observability/beach-podmonitor.yaml"
+  local component line
+
+  for component in alertmanager kubeEtcd kubeScheduler kubeControllerManager kubeProxy; do
+    assert_yaml_component_disabled "$component" "$values"
+  done
+  for line in '    retention: 2d' '    retentionSize: 5GB' '    scrapeInterval: 30s' \
+    '    podMonitorSelectorNilUsesHelmValues: false' '    existingSecret: grafana-admin'; do
+    grep -Fxq -- "$line" "$values" || fail "missing values line: $line"
+  done
+  [[ "$(grep -c 'node-role: observability' "$values")" == '5' ]] \
+    || fail 'operator, webhook job, Prometheus, Grafana and kube-state-metrics must all target obs-1'
+  if grep -Eq 'storageSpec|adminPassword' "$values"; then
+    fail 'Prometheus must use emptyDir and Grafana must not carry a password in values'
+  fi
+
+  grep -Fxq '    - port: management' "$podmonitor" || fail 'PodMonitor must scrape the management port'
+  grep -Fxq '      path: /actuator/prometheus' "$podmonitor" || fail 'PodMonitor path is wrong'
+}
+
 test_kubeconfig_files_are_ignored() {
   git -C "$repo_root" check-ignore -q kubeconfig \
     || fail 'kubeconfig is not ignored'
@@ -679,6 +709,7 @@ main() {
   test_dependencies_are_applied_on_the_control_plane
   test_beach_deployment_creates_runtime_secret_and_rolls_out
   test_management_port_is_not_exposed_outside_pods
+  test_observability_values_fit_the_observability_node
   test_kubeconfig_files_are_ignored
   test_provision_and_deploy_runs_steps_in_order
   printf 'PASS bootstrap script tests\n'

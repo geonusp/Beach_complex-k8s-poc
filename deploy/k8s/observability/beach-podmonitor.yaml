@@ -1,0 +1,17 @@
+# Service에 8081을 추가하지 않고 Pod의 management 포트를 직접 scrape한다.
+apiVersion: monitoring.coreos.com/v1
+kind: PodMonitor
+metadata:
+  name: beach
+  namespace: monitoring
+spec:
+  namespaceSelector:
+    matchNames:
+      - beach
+  selector:
+    matchLabels:
+      app.kubernetes.io/name: beach
+      app.kubernetes.io/component: backend
+  podMetricsEndpoints:
+    - port: management
+      path: /actuator/prometheus
