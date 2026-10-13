@@ -8,10 +8,11 @@ readonly kube_prometheus_stack_chart_version="${KUBE_PROMETHEUS_STACK_CHART_VERS
 main() {
   require_tools
 
-  local control_plane_id values_encoded podmonitor_encoded
+  local control_plane_id values_encoded podmonitor_encoded dashboard_encoded
   control_plane_id="$(terraform_output control_plane_instance_id)"
   values_encoded="$(base64 -w0 "$repo_root/deploy/k8s/observability/kube-prometheus-stack-values.yaml")"
   podmonitor_encoded="$(base64 -w0 "$repo_root/deploy/k8s/observability/beach-podmonitor.yaml")"
+  dashboard_encoded="$(base64 -w0 "$repo_root/deploy/k8s/observability/dashboards/beach-overview.json")"
 
   log "installing kube-prometheus-stack chart $kube_prometheus_stack_chart_version on $control_plane_id"
 
@@ -41,6 +42,12 @@ helm upgrade --install kube-prometheus-stack prometheus-community/kube-prometheu
   --wait --timeout 10m
 
 kubectl apply -f /tmp/beach-podmonitor.yaml
+
+# Grafana dashboard sidecar가 grafana_dashboard=1 라벨 ConfigMap을 읽어 대시보드를 등록한다.
+echo '$dashboard_encoded' | base64 -d > /tmp/beach-overview.json
+kubectl -n monitoring create configmap beach-dashboards --from-file=beach-overview.json=/tmp/beach-overview.json --dry-run=client -o yaml | kubectl apply -f -
+kubectl -n monitoring label configmap beach-dashboards grafana_dashboard=1 --overwrite
+
 kubectl -n monitoring get pods -o wide
 "
 

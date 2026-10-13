@@ -752,6 +752,31 @@ test_observability_verification_fails_on_down_target() {
   fi
 }
 
+test_beach_dashboard_matches_verification_queries() {
+  local dashboard="$repo_root/deploy/k8s/observability/dashboards/beach-overview.json"
+  local queries="$repo_root/deploy/k8s/observability/promql-queries.tsv"
+
+  python3 - "$dashboard" "$queries" <<'PY' || fail 'Beach dashboard does not match promql-queries.tsv'
+import json, sys
+dashboard = json.load(open(sys.argv[1], encoding='utf-8'))
+queries = [line.rstrip('\n').split('\t')[1] for line in open(sys.argv[2], encoding='utf-8') if line.strip()]
+panels = dashboard['panels']
+exprs = [target['expr'] for panel in panels for target in panel['targets']]
+assert dashboard['uid'] == 'beach-overview', dashboard['uid']
+assert all(panel['datasource'] == {'type': 'prometheus', 'uid': 'prometheus'} for panel in panels)
+assert sorted(exprs) == sorted(queries), set(exprs) ^ set(queries)
+PY
+}
+
+test_beach_dashboard_is_provisioned_for_grafana_sidecar() {
+  run_install_observability observability-dashboard true
+
+  grep -Fxq -- '-n monitoring create configmap beach-dashboards --from-file=beach-overview.json=/tmp/beach-overview.json --dry-run=client -o yaml' \
+    "$test_dir/observability-dashboard-kubectl.log" || fail 'dashboard ConfigMap was not rendered'
+  grep -Fxq -- '-n monitoring label configmap beach-dashboards grafana_dashboard=1 --overwrite' \
+    "$test_dir/observability-dashboard-kubectl.log" || fail 'dashboard ConfigMap is not labelled for the Grafana sidecar'
+}
+
 test_kubeconfig_files_are_ignored() {
   git -C "$repo_root" check-ignore -q kubeconfig \
     || fail 'kubeconfig is not ignored'
@@ -808,6 +833,8 @@ main() {
   test_observability_rerun_keeps_grafana_secret
   test_observability_verification_reports_targets_and_queries
   test_observability_verification_fails_on_down_target
+  test_beach_dashboard_matches_verification_queries
+  test_beach_dashboard_is_provisioned_for_grafana_sidecar
   test_kubeconfig_files_are_ignored
   test_provision_and_deploy_runs_steps_in_order
   printf 'PASS bootstrap script tests\n'
