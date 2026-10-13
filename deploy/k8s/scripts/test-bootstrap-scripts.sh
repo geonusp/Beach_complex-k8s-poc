@@ -708,6 +708,50 @@ test_observability_rerun_keeps_grafana_secret() {
   fi
 }
 
+run_verify_observability() {
+  local name="$1"
+  local targets_json="$2"
+  local bin_dir="$test_dir/$name-bin"
+  local parameters_file="$test_dir/$name-parameters"
+  local remote_script="$test_dir/$name-remote.sh"
+
+  write_fake_tools "$bin_dir"
+  printf '%s' "$targets_json" > "$test_dir/$name-targets.json"
+  cat > "$bin_dir/kubectl" <<'EOF'
+#!/usr/bin/env bash
+case "$*" in
+  *'/api/v1/targets'*) cat "$TARGETS_JSON" ;;
+  *'/api/v1/query'*) printf '{"status":"success","data":{"resultType":"vector","result":[{"metric":{},"value":[0,"1"]}]}}' ;;
+  *) printf 'fake %s\n' "$*" ;;
+esac
+EOF
+  chmod +x "$bin_dir/kubectl"
+
+  PATH="$bin_dir:$PATH" AWS_PARAMETERS_FILE="$parameters_file" \
+    bash "$script_dir/verify-observability.sh" >/dev/null
+  decode_remote_script "$parameters_file" "$remote_script"
+  PATH="$bin_dir:$PATH" TARGETS_JSON="$test_dir/$name-targets.json" \
+    bash "$remote_script" > "$test_dir/$name-output.txt" 2>&1
+}
+
+test_observability_verification_reports_targets_and_queries() {
+  run_verify_observability verify-up \
+    '{"data":{"activeTargets":[{"labels":{"job":"beach"},"health":"up","scrapeUrl":"http://10.244.1.5:8081/actuator/prometheus","lastError":""}]}}' \
+    || fail 'verification failed although every target was up'
+
+  grep -Fq "$(printf 'beach\tup\thttp://10.244.1.5:8081/actuator/prometheus')" "$test_dir/verify-up-output.txt" \
+    || fail 'target line was not printed'
+  grep -Fq "$(printf 'http_p95_seconds\t[')" "$test_dir/verify-up-output.txt" \
+    || fail 'PromQL results were not printed'
+}
+
+test_observability_verification_fails_on_down_target() {
+  if run_verify_observability verify-down \
+    '{"data":{"activeTargets":[{"labels":{"job":"kube-proxy"},"health":"down","scrapeUrl":"http://10.0.1.10:10249/metrics","lastError":"connection refused"}]}}'; then
+    fail 'verification passed although a target was down'
+  fi
+}
+
 test_kubeconfig_files_are_ignored() {
   git -C "$repo_root" check-ignore -q kubeconfig \
     || fail 'kubeconfig is not ignored'
@@ -762,6 +806,8 @@ main() {
   test_observability_values_fit_the_observability_node
   test_observability_stack_is_installed_with_generated_grafana_secret
   test_observability_rerun_keeps_grafana_secret
+  test_observability_verification_reports_targets_and_queries
+  test_observability_verification_fails_on_down_target
   test_kubeconfig_files_are_ignored
   test_provision_and_deploy_runs_steps_in_order
   printf 'PASS bootstrap script tests\n'
