@@ -70,6 +70,13 @@ management:
   otlp:
     tracing:
       timeout: ${MANAGEMENT_OTLP_TRACING_TIMEOUT:5s}
+  metrics:
+    tags:
+      application: beach
+    distribution:
+      # Pod 여러 개를 합산해 p95/p99를 계산하려면 앱 내부 percentile이 아니라 histogram bucket이 필요하다.
+      percentiles-histogram:
+        http.server.requests: true
   endpoints:
     web:
       exposure:

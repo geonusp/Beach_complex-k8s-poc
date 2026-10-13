@@ -33,6 +33,7 @@ dependencies {
     // TODO(OAuth): OAuth 로그인 도입 시 spring-boot-starter-oauth2-client(및 provider 설정) 추가 검토.
     implementation 'org.springframework.boot:spring-boot-starter-validation'
     implementation 'org.springframework.boot:spring-boot-starter-actuator'
+    runtimeOnly 'io.micrometer:micrometer-registry-prometheus'
     implementation 'io.micrometer:micrometer-tracing-bridge-otel'
     implementation 'io.opentelemetry:opentelemetry-exporter-otlp'
     implementation platform('net.ttddyy.observation:datasource-micrometer-bom:1.4.1')
