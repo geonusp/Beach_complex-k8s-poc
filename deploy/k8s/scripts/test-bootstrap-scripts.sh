@@ -236,11 +236,12 @@ EOF
     || fail 'incomplete control plane did not report a recovery-oriented error'
 }
 
-test_pod_cidr_override_reaches_kubeadm() {
-  local bin_dir="$test_dir/cidr-bin"
-  local parameters_file="$test_dir/cidr-parameters"
-  local remote_script="$test_dir/cidr-remote.sh"
+test_kubeadm_config_enables_kubelet_serving_tls() {
+  local bin_dir="$test_dir/kubeadm-config-bin"
+  local parameters_file="$test_dir/kubeadm-config-parameters"
+  local remote_script="$test_dir/kubeadm-config-remote.sh"
   local kubeadm_log="$test_dir/kubeadm.log"
+  local config_capture="$test_dir/kubeadm-config.yaml"
 
   write_fake_tools "$bin_dir"
   cat > "$bin_dir/hostnamectl" <<'EOF'
@@ -250,6 +251,7 @@ EOF
   cat > "$bin_dir/kubeadm" <<'EOF'
 #!/usr/bin/env bash
 printf '%s\n' "$*" >> "$KUBEADM_LOG"
+cp "${@: -1}" "$KUBEADM_CONFIG_CAPTURE"
 EOF
   cat > "$bin_dir/install" <<'EOF'
 #!/usr/bin/env bash
@@ -264,10 +266,18 @@ EOF
   PATH="$bin_dir:$PATH" AWS_PARAMETERS_FILE="$parameters_file" \
     POD_NETWORK_CIDR=10.245.0.0/16 bash "$script_dir/init-control-plane.sh" >/dev/null
   decode_remote_script "$parameters_file" "$remote_script"
-  PATH="$bin_dir:$PATH" KUBEADM_LOG="$kubeadm_log" bash "$remote_script"
+  PATH="$bin_dir:$PATH" KUBEADM_LOG="$kubeadm_log" KUBEADM_CONFIG_CAPTURE="$config_capture" \
+    bash "$remote_script"
 
-  [[ "$(cat "$kubeadm_log")" == *'--pod-network-cidr 10.245.0.0/16'* ]] \
-    || fail 'POD_NETWORK_CIDR did not reach kubeadm'
+  assert_file_equals 'init --config /tmp/kubeadm-config.yaml' "$kubeadm_log"
+  grep -Fxq '  advertiseAddress: 10.0.1.10' "$config_capture" \
+    || fail 'control plane IP did not reach the kubeadm config'
+  grep -Fxq '  name: beach-complex-cp-1' "$config_capture" \
+    || fail 'node name did not reach the kubeadm config'
+  grep -Fxq '  podSubnet: 10.245.0.0/16' "$config_capture" \
+    || fail 'POD_NETWORK_CIDR did not reach the kubeadm config'
+  grep -Fxq 'serverTLSBootstrap: true' "$config_capture" \
+    || fail 'kubelet serving TLS bootstrap is not enabled'
 }
 
 test_bootstrap_verifies_expected_nodes_and_coredns() {
@@ -280,7 +290,7 @@ test_bootstrap_verifies_expected_nodes_and_coredns() {
   cat > "$bin_dir/bash" <<'EOF'
 #!/bin/bash
 case "$1" in
-  */init-control-plane.sh|*/join-workers.sh|*/install-cilium.sh|*/label-nodes.sh) exit 0 ;;
+  */init-control-plane.sh|*/join-workers.sh|*/install-cilium.sh|*/label-nodes.sh|*/approve-kubelet-serving-csrs.sh) exit 0 ;;
   *) exec /bin/bash "$@" ;;
 esac
 EOF
@@ -364,6 +374,101 @@ test_python_is_checked_before_worker_join() {
   [[ $status -ne 0 ]] || fail 'join-workers.sh succeeded without python3'
   [[ "$(cat "$output_file")" == *'python3 is required but not installed'* ]] \
     || fail 'join-workers.sh did not report the missing python3 dependency'
+}
+
+write_fake_csr_kubectl() {
+  local bin_dir="$1"
+  cat > "$bin_dir/kubectl" <<'EOF'
+#!/usr/bin/env bash
+if [[ "$*" == 'get csr --no-headers'* ]]; then
+  cat "$CSR_LIST"
+elif [[ "$*" == 'get node '* ]]; then
+  printf '10.0.1.20'
+else
+  printf '%s\n' "$*" >> "$KUBECTL_LOG"
+fi
+EOF
+  cat > "$bin_dir/openssl" <<'EOF'
+#!/usr/bin/env bash
+[[ "${KUBELET_CERT_VERIFIED:-false}" == 'true' ]]
+EOF
+  chmod +x "$bin_dir/kubectl" "$bin_dir/openssl"
+}
+
+test_only_known_kubelet_serving_csrs_are_approved() {
+  local bin_dir="$test_dir/csr-bin"
+  local parameters_file="$test_dir/csr-parameters"
+  local remote_script="$test_dir/csr-remote.sh"
+  local kubectl_log="$test_dir/kubectl-csr.log"
+  local csr_list="$test_dir/csr-list.txt"
+
+  write_fake_tools "$bin_dir"
+  write_fake_csr_kubectl "$bin_dir"
+  cat > "$csr_list" <<'EOF'
+csr-cp       kubernetes.io/kubelet-serving                 system:node:beach-complex-cp-1    <none>
+csr-app1     kubernetes.io/kubelet-serving                 system:node:beach-complex-app-1   Approved
+csr-app2     kubernetes.io/kubelet-serving                 system:node:beach-complex-app-2   <none>
+csr-obs      kubernetes.io/kubelet-serving                 system:node:beach-complex-obs-1   <none>
+csr-rogue    kubernetes.io/kubelet-serving                 system:node:intruder              <none>
+csr-client   kubernetes.io/kube-apiserver-client-kubelet   system:node:beach-complex-obs-1   <none>
+EOF
+
+  PATH="$bin_dir:$PATH" AWS_PARAMETERS_FILE="$parameters_file" \
+    KUBELET_CSR_POLL_INTERVAL_SECONDS=0 \
+    bash "$script_dir/approve-kubelet-serving-csrs.sh" >/dev/null
+  decode_remote_script "$parameters_file" "$remote_script"
+  PATH="$bin_dir:$PATH" KUBECTL_LOG="$kubectl_log" CSR_LIST="$csr_list" bash "$remote_script" >/dev/null
+
+  assert_file_equals 'certificate approve csr-cp
+certificate approve csr-app2
+certificate approve csr-obs
+get csr' "$kubectl_log"
+}
+
+test_missing_kubelet_serving_csr_fails_after_timeout() {
+  local bin_dir="$test_dir/csr-missing-bin"
+  local parameters_file="$test_dir/csr-missing-parameters"
+  local remote_script="$test_dir/csr-missing-remote.sh"
+  local csr_list="$test_dir/csr-missing-list.txt"
+
+  write_fake_tools "$bin_dir"
+  write_fake_csr_kubectl "$bin_dir"
+  cat > "$csr_list" <<'EOF'
+csr-cp       kubernetes.io/kubelet-serving                 system:node:beach-complex-cp-1    Approved
+EOF
+
+  PATH="$bin_dir:$PATH" AWS_PARAMETERS_FILE="$parameters_file" \
+    KUBELET_CSR_TIMEOUT_SECONDS=0 KUBELET_CSR_POLL_INTERVAL_SECONDS=0 \
+    bash "$script_dir/approve-kubelet-serving-csrs.sh" >/dev/null
+  decode_remote_script "$parameters_file" "$remote_script"
+
+  if PATH="$bin_dir:$PATH" KUBECTL_LOG="$test_dir/kubectl-csr-missing.log" CSR_LIST="$csr_list" \
+    bash "$remote_script" >/dev/null 2>&1; then
+    fail 'CSR approval succeeded although worker CSRs were missing'
+  fi
+}
+
+test_rerun_accepts_kubelets_with_issued_certificates() {
+  local bin_dir="$test_dir/csr-rerun-bin"
+  local parameters_file="$test_dir/csr-rerun-parameters"
+  local remote_script="$test_dir/csr-rerun-remote.sh"
+  local kubectl_log="$test_dir/kubectl-csr-rerun.log"
+  local csr_list="$test_dir/csr-rerun-list.txt"
+
+  write_fake_tools "$bin_dir"
+  write_fake_csr_kubectl "$bin_dir"
+  # 승인된 CSR은 1시간 뒤 자동 삭제된다. 재실행 시점에는 CSR 목록이 비어 있을 수 있다.
+  : > "$csr_list"
+
+  PATH="$bin_dir:$PATH" AWS_PARAMETERS_FILE="$parameters_file" \
+    KUBELET_CSR_TIMEOUT_SECONDS=0 KUBELET_CSR_POLL_INTERVAL_SECONDS=0 \
+    bash "$script_dir/approve-kubelet-serving-csrs.sh" >/dev/null
+  decode_remote_script "$parameters_file" "$remote_script"
+  PATH="$bin_dir:$PATH" KUBECTL_LOG="$kubectl_log" CSR_LIST="$csr_list" KUBELET_CERT_VERIFIED=true \
+    bash "$remote_script" >/dev/null \
+    || fail 'CSR approval failed although every kubelet already serves a CA-signed certificate'
+
+  assert_file_equals 'get csr' "$kubectl_log"
 }
 
 test_ghcr_secret_is_rehydrated_from_ssm() {
@@ -511,11 +616,14 @@ main() {
   test_ssm_waits_for_in_progress_command
   test_existing_control_plane_restores_admin_kubeconfig
   test_incomplete_control_plane_is_rejected
-  test_pod_cidr_override_reaches_kubeadm
+  test_kubeadm_config_enables_kubelet_serving_tls
   test_control_plane_keeps_node_selector_role_empty
   test_bootstrap_verifies_expected_nodes_and_coredns
   test_cilium_existing_install_is_reconciled_and_verified
   test_python_is_checked_before_worker_join
+  test_only_known_kubelet_serving_csrs_are_approved
+  test_missing_kubelet_serving_csr_fails_after_timeout
+  test_rerun_accepts_kubelets_with_issued_certificates
   test_ghcr_secret_is_rehydrated_from_ssm
   test_ghcr_secret_script_bootstraps_remote_aws_cli
   test_dependencies_are_applied_on_the_control_plane
