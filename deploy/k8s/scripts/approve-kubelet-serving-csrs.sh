@@ -36,6 +36,13 @@ while true; do
         '<none>') kubectl certificate approve \"\$name\"; issued=yes ;;
       esac
     done < <(kubectl get csr --no-headers -o 'custom-columns=NAME:.metadata.name,SIGNER:.spec.signerName,USER:.spec.username,CONDITION:.status.conditions[0].type')
+    # 승인된 CSR은 1시간 뒤 삭제된다. 재실행 때는 kubelet이 이미 클러스터 CA 인증서를 쓰는지 직접 확인한다.
+    if [ -z \"\$issued\" ]; then
+      address=\"\$(kubectl get node \"\$node\" -o 'jsonpath={.status.addresses[?(@.type==\"InternalIP\")].address}' 2>/dev/null || true)\"
+      if [ -n \"\$address\" ] && timeout 10 openssl s_client -connect \"\$address:10250\" -CAfile /etc/kubernetes/pki/ca.crt -verify_return_error </dev/null >/dev/null 2>&1; then
+        issued=yes
+      fi
+    fi
     [ -n \"\$issued\" ] || missing=\"\$missing \$node\"
   done
   [ -n \"\$missing\" ] || break

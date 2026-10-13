@@ -382,11 +382,17 @@ write_fake_csr_kubectl() {
 #!/usr/bin/env bash
 if [[ "$*" == 'get csr --no-headers'* ]]; then
   cat "$CSR_LIST"
+elif [[ "$*" == 'get node '* ]]; then
+  printf '10.0.1.20'
 else
   printf '%s\n' "$*" >> "$KUBECTL_LOG"
 fi
 EOF
-  chmod +x "$bin_dir/kubectl"
+  cat > "$bin_dir/openssl" <<'EOF'
+#!/usr/bin/env bash
+[[ "${KUBELET_CERT_VERIFIED:-false}" == 'true' ]]
+EOF
+  chmod +x "$bin_dir/kubectl" "$bin_dir/openssl"
 }
 
 test_only_known_kubelet_serving_csrs_are_approved() {
@@ -440,6 +446,29 @@ EOF
     bash "$remote_script" >/dev/null 2>&1; then
     fail 'CSR approval succeeded although worker CSRs were missing'
   fi
+}
+
+test_rerun_accepts_kubelets_with_issued_certificates() {
+  local bin_dir="$test_dir/csr-rerun-bin"
+  local parameters_file="$test_dir/csr-rerun-parameters"
+  local remote_script="$test_dir/csr-rerun-remote.sh"
+  local kubectl_log="$test_dir/kubectl-csr-rerun.log"
+  local csr_list="$test_dir/csr-rerun-list.txt"
+
+  write_fake_tools "$bin_dir"
+  write_fake_csr_kubectl "$bin_dir"
+  # 승인된 CSR은 1시간 뒤 자동 삭제된다. 재실행 시점에는 CSR 목록이 비어 있을 수 있다.
+  : > "$csr_list"
+
+  PATH="$bin_dir:$PATH" AWS_PARAMETERS_FILE="$parameters_file" \
+    KUBELET_CSR_TIMEOUT_SECONDS=0 KUBELET_CSR_POLL_INTERVAL_SECONDS=0 \
+    bash "$script_dir/approve-kubelet-serving-csrs.sh" >/dev/null
+  decode_remote_script "$parameters_file" "$remote_script"
+  PATH="$bin_dir:$PATH" KUBECTL_LOG="$kubectl_log" CSR_LIST="$csr_list" KUBELET_CERT_VERIFIED=true \
+    bash "$remote_script" >/dev/null \
+    || fail 'CSR approval failed although every kubelet already serves a CA-signed certificate'
+
+  assert_file_equals 'get csr' "$kubectl_log"
 }
 
 test_ghcr_secret_is_rehydrated_from_ssm() {
@@ -594,6 +623,7 @@ main() {
   test_python_is_checked_before_worker_join
   test_only_known_kubelet_serving_csrs_are_approved
   test_missing_kubelet_serving_csr_fails_after_timeout
+  test_rerun_accepts_kubelets_with_issued_certificates
   test_ghcr_secret_is_rehydrated_from_ssm
   test_ghcr_secret_script_bootstraps_remote_aws_cli
   test_dependencies_are_applied_on_the_control_plane
