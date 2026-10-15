@@ -1,0 +1,93 @@
+[beach-k8s] verifying resource metrics and Prometheus on i-032de72bc36a8cdd2
+== beach traffic
+sent 30 requests, waiting 65s for scrapes
+== kubectl top node
+NAME                  CPU(cores)   CPU(%)   MEMORY(bytes)   MEMORY(%)   
+beach-complex-app-1   63m          3%       957Mi           53%         
+beach-complex-app-2   90m          4%       1034Mi          57%         
+beach-complex-cp-1    132m         6%       1741Mi          46%         
+beach-complex-obs-1   100m         5%       1403Mi          37%         
+== kubectl top pod
+NAMESPACE     NAME                                                       CPU(cores)   MEMORY(bytes)   
+beach         beach-5fcc9958d9-qpzh7                                     5m           429Mi           
+beach         beach-5fcc9958d9-zfp5w                                     3m           434Mi           
+beach         postgres-65c5d697db-krm77                                  5m           68Mi            
+beach         redis-c4fb5bd98-mxdw5                                      9m           4Mi             
+kube-system   cilium-6dvw4                                               30m          146Mi           
+kube-system   cilium-87p2f                                               26m          144Mi           
+kube-system   cilium-97b4t                                               47m          164Mi           
+kube-system   cilium-envoy-dkj4t                                         3m           15Mi            
+kube-system   cilium-envoy-qtb24                                         2m           14Mi            
+kube-system   cilium-envoy-rqx5q                                         3m           17Mi            
+kube-system   cilium-envoy-rzdfp                                         2m           17Mi            
+kube-system   cilium-lp27g                                               23m          145Mi           
+kube-system   cilium-operator-65857c7db4-c4np6                           6m           36Mi            
+kube-system   cilium-operator-65857c7db4-nbrsz                           1m           31Mi            
+kube-system   coredns-8b8bb7f4c-dnvpq                                    2m           21Mi            
+kube-system   coredns-8b8bb7f4c-ksx5c                                    4m           20Mi            
+kube-system   etcd-beach-complex-cp-1                                    21m          56Mi            
+kube-system   kube-apiserver-beach-complex-cp-1                          67m          657Mi           
+kube-system   kube-controller-manager-beach-complex-cp-1                 16m          67Mi            
+kube-system   kube-proxy-2t6hh                                           1m           21Mi            
+kube-system   kube-proxy-jrqrq                                           1m           15Mi            
+kube-system   kube-proxy-jrxpr                                           1m           15Mi            
+kube-system   kube-proxy-tfwhb                                           1m           14Mi            
+kube-system   kube-scheduler-beach-complex-cp-1                          8m           29Mi            
+kube-system   metrics-server-6c6547ff7c-j458h                            3m           20Mi            
+monitoring    kube-prometheus-stack-grafana-7755b486f8-2qh8k             14m          402Mi           
+monitoring    kube-prometheus-stack-kube-state-metrics-75b7f5b6b-pdhx5   2m           19Mi            
+monitoring    kube-prometheus-stack-operator-6f446885c8-q2w2z            3m           22Mi            
+monitoring    kube-prometheus-stack-prometheus-node-exporter-l27rn       1m           12Mi            
+monitoring    kube-prometheus-stack-prometheus-node-exporter-q59dh       1m           9Mi             
+monitoring    kube-prometheus-stack-prometheus-node-exporter-tzn8q       8m           13Mi            
+monitoring    kube-prometheus-stack-prometheus-node-exporter-xgmrh       1m           15Mi            
+monitoring    prometheus-kube-prometheus-stack-prometheus-0              13m          200Mi           
+== monitoring pods
+NAME                                                       READY   STATUS    RESTARTS   AGE    IP             NODE                  NOMINATED NODE   READINESS GATES
+kube-prometheus-stack-grafana-7755b486f8-2qh8k             3/3     Running   0          3h6m   10.244.1.146   beach-complex-obs-1   <none>           <none>
+kube-prometheus-stack-kube-state-metrics-75b7f5b6b-pdhx5   1/1     Running   0          15h    10.244.1.142   beach-complex-obs-1   <none>           <none>
+kube-prometheus-stack-operator-6f446885c8-q2w2z            1/1     Running   0          15h    10.244.1.114   beach-complex-obs-1   <none>           <none>
+kube-prometheus-stack-prometheus-node-exporter-l27rn       1/1     Running   0          15h    10.0.2.155     beach-complex-app-2   <none>           <none>
+kube-prometheus-stack-prometheus-node-exporter-q59dh       1/1     Running   0          15h    10.0.1.33      beach-complex-cp-1    <none>           <none>
+kube-prometheus-stack-prometheus-node-exporter-tzn8q       1/1     Running   0          15h    10.0.1.174     beach-complex-app-1   <none>           <none>
+kube-prometheus-stack-prometheus-node-exporter-xgmrh       1/1     Running   0          15h    10.0.2.204     beach-complex-obs-1   <none>           <none>
+prometheus-kube-prometheus-stack-prometheus-0              2/2     Running   0          15h    10.244.1.113   beach-complex-obs-1   <none>           <none>
+== prometheus targets
+monitoring/beach	up	http://10.244.3.206:8081/actuator/prometheus	
+monitoring/beach	up	http://10.244.0.201:8081/actuator/prometheus	
+apiserver	up	https://10.0.1.33:6443/metrics	
+coredns	up	http://10.244.3.4:9153/metrics	
+coredns	up	http://10.244.3.162:9153/metrics	
+kube-prometheus-stack-grafana	up	http://10.244.1.146:3000/metrics	
+kube-state-metrics	up	http://10.244.1.142:8080/metrics	
+kubelet	up	https://10.0.2.204:10250/metrics	
+kubelet	up	https://10.0.1.174:10250/metrics	
+kubelet	up	https://10.0.2.155:10250/metrics	
+kubelet	up	https://10.0.1.33:10250/metrics	
+kubelet	up	https://10.0.1.174:10250/metrics/cadvisor	
+kubelet	up	https://10.0.2.155:10250/metrics/cadvisor	
+kubelet	up	https://10.0.1.33:10250/metrics/cadvisor	
+kubelet	up	https://10.0.2.204:10250/metrics/cadvisor	
+kubelet	up	https://10.0.1.174:10250/metrics/probes	
+kubelet	up	https://10.0.2.155:10250/metrics/probes	
+kubelet	up	https://10.0.1.33:10250/metrics/probes	
+kubelet	up	https://10.0.2.204:10250/metrics/probes	
+kube-prometheus-stack-operator	up	https://10.244.1.114:10250/metrics	
+node-exporter	up	http://10.0.2.204:9100/metrics	
+node-exporter	up	http://10.0.1.174:9100/metrics	
+node-exporter	up	http://10.0.1.33:9100/metrics	
+node-exporter	up	http://10.0.2.155:9100/metrics	
+kube-prometheus-stack-prometheus	up	http://10.244.1.113:9090/metrics	
+kube-prometheus-stack-prometheus	up	http://10.244.1.113:8080/metrics	
+== promql
+http_request_rate	[{"metric":{},"value":[1792091899.704,"3.6148148148148147"]}]
+http_5xx_ratio	[{"metric":{},"value":[1792091899.836,"0"]}]
+http_p95_seconds	[{"metric":{},"value":[1792091899.969,"0.0035092319999999915"]}]
+jvm_heap_used_bytes	[{"metric":{"pod":"beach-5fcc9958d9-qpzh7"},"value":[1792091900.103,"77200216"]},{"metric":{"pod":"beach-5fcc9958d9-zfp5w"},"value":[1792091900.103,"89951336"]}]
+jvm_gc_pause_seconds_rate	[{"metric":{"pod":"beach-5fcc9958d9-qpzh7"},"value":[1792091900.231,"0.000033333333333333775"]},{"metric":{"pod":"beach-5fcc9958d9-zfp5w"},"value":[1792091900.231,"0.00018518518518518537"]}]
+pod_cpu_cores	[{"metric":{"pod":"beach-5fcc9958d9-zfp5w"},"value":[1792091900.364,"0.01158634635948791"]},{"metric":{"pod":"beach-5fcc9958d9-qpzh7"},"value":[1792091900.364,"0.007914440557823142"]}]
+pod_memory_working_set_bytes	[{"metric":{"pod":"beach-5fcc9958d9-zfp5w"},"value":[1792091900.496,"455081984"]},{"metric":{"pod":"beach-5fcc9958d9-qpzh7"},"value":[1792091900.496,"450506752"]}]
+pod_restarts_total	[{"metric":{"pod":"postgres-65c5d697db-krm77"},"value":[1792091900.649,"0"]},{"metric":{"pod":"redis-c4fb5bd98-mxdw5"},"value":[1792091900.649,"0"]},{"metric":{"pod":"beach-5fcc9958d9-zfp5w"},"value":[1792091900.649,"0"]},{"metric":{"pod":"beach-5fcc9958d9-qpzh7"},"value":[1792091900.649,"0"]},{"metric":{"pod":"beach-k6-rollout-ds9kz"},"value":[1792091900.649,"0"]}]
+prometheus_head_series	[{"metric":{"__name__":"prometheus_tsdb_head_series","container":"prometheus","endpoint":"http-web","instance":"10.244.1.113:9090","job":"kube-prometheus-stack-prometheus","namespace":"monitoring","pod":"prometheus-kube-prometheus-stack-prometheus-0","service":"kube-prometheus-stack-prometheus"},"value":[1792091900.783,"47945"]}]
+
+[beach-k8s] observability verification passed
