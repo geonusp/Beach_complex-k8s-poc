@@ -57,7 +57,9 @@
       },
       "fieldConfig": {
         "defaults": {
-          "unit": "percentunit"
+          "unit": "percentunit",
+          "min": 0,
+          "max": 1
         },
         "overrides": []
       },
@@ -232,7 +234,7 @@
       "targets": [
         {
           "refId": "A",
-          "expr": "sum by (pod) (kube_pod_container_status_restarts_total{namespace=\"beach\"})",
+          "expr": "sum by (pod) (kube_pod_container_status_restarts_total{namespace=\"beach\",pod!~\"beach-k6-.*\"})",
           "legendFormat": "{{pod}}"
         }
       ]
@@ -253,7 +255,8 @@
       },
       "fieldConfig": {
         "defaults": {
-          "unit": "short"
+          "unit": "none",
+          "decimals": 0
         },
         "overrides": []
       },
