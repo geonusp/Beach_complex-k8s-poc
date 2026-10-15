@@ -55,12 +55,13 @@ grafana:
     existingSecret: grafana-admin
     userKey: admin-user
     passwordKey: admin-password
+  # 256Mi limit은 첫 로그인과 대시보드 로딩 중 OOMKilled가 났다. 공식 최소 권장 메모리 512MB에 맞춘다.
   resources:
     requests:
       cpu: 50m
-      memory: 128Mi
-    limits:
       memory: 256Mi
+    limits:
+      memory: 512Mi
 
 kube-state-metrics:
   nodeSelector:
