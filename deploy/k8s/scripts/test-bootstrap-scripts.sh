@@ -711,6 +711,7 @@ test_observability_rerun_keeps_grafana_secret() {
 run_verify_observability() {
   local name="$1"
   local targets_json="$2"
+  local query_value="${3:-1}"
   local bin_dir="$test_dir/$name-bin"
   local parameters_file="$test_dir/$name-parameters"
   local remote_script="$test_dir/$name-remote.sh"
@@ -719,19 +720,25 @@ run_verify_observability() {
   printf '%s' "$targets_json" > "$test_dir/$name-targets.json"
   cat > "$bin_dir/kubectl" <<'EOF'
 #!/usr/bin/env bash
+printf 'kubectl %s\n' "$*" >> "$CALL_LOG"
 case "$*" in
   *'/api/v1/targets'*) cat "$TARGETS_JSON" ;;
-  *'/api/v1/query'*) printf '{"status":"success","data":{"resultType":"vector","result":[{"metric":{},"value":[0,"1"]}]}}' ;;
+  *'/api/v1/query'*) printf '{"status":"success","data":{"resultType":"vector","result":[{"metric":{},"value":[0,"%s"]}]}}' "$QUERY_VALUE" ;;
+  '-n beach get svc beach -o jsonpath={.spec.clusterIP}') printf '10.96.0.20' ;;
   *) printf 'fake %s\n' "$*" ;;
 esac
 EOF
-  chmod +x "$bin_dir/kubectl"
+  cat > "$bin_dir/curl" <<'EOF'
+#!/usr/bin/env bash
+printf 'curl %s\n' "${!#}" >> "$CALL_LOG"
+EOF
+  chmod +x "$bin_dir/kubectl" "$bin_dir/curl"
 
-  PATH="$bin_dir:$PATH" AWS_PARAMETERS_FILE="$parameters_file" \
+  PATH="$bin_dir:$PATH" AWS_PARAMETERS_FILE="$parameters_file" OBSERVABILITY_SCRAPE_WAIT_SECONDS=0 \
     bash "$script_dir/verify-observability.sh" >/dev/null
   decode_remote_script "$parameters_file" "$remote_script"
-  PATH="$bin_dir:$PATH" TARGETS_JSON="$test_dir/$name-targets.json" \
-    bash "$remote_script" > "$test_dir/$name-output.txt" 2>&1
+  PATH="$bin_dir:$PATH" TARGETS_JSON="$test_dir/$name-targets.json" QUERY_VALUE="$query_value" \
+    CALL_LOG="$test_dir/$name-calls.log" bash "$remote_script" > "$test_dir/$name-output.txt" 2>&1
 }
 
 test_observability_verification_reports_targets_and_queries() {
@@ -750,6 +757,27 @@ test_observability_verification_fails_on_down_target() {
     '{"data":{"activeTargets":[{"labels":{"job":"kube-proxy"},"health":"down","scrapeUrl":"http://10.0.1.10:10249/metrics","lastError":"connection refused"}]}}'; then
     fail 'verification passed although a target was down'
   fi
+}
+
+test_observability_verification_sends_beach_traffic_before_queries() {
+  run_verify_observability verify-traffic \
+    '{"data":{"activeTargets":[{"labels":{"job":"beach"},"health":"up","scrapeUrl":"http://10.244.1.5:8081/actuator/prometheus","lastError":""}]}}' \
+    || fail 'verification failed although every target was up'
+
+  local calls="$test_dir/verify-traffic-calls.log"
+  [[ "$(grep -cFx 'curl http://10.96.0.20/api/beaches' "$calls")" == '30' ]] \
+    || fail 'verification must send 30 requests to the Beach Service'
+  (( $(grep -nF 'curl ' "$calls" | tail -1 | cut -d: -f1) < $(grep -nF '/api/v1/query' "$calls" | head -1 | cut -d: -f1) )) \
+    || fail 'Beach traffic must be sent before PromQL queries'
+}
+
+test_observability_verification_fails_on_nan_result() {
+  if run_verify_observability verify-nan \
+    '{"data":{"activeTargets":[{"labels":{"job":"beach"},"health":"up","scrapeUrl":"http://10.244.1.5:8081/actuator/prometheus","lastError":""}]}}' \
+    NaN; then
+    fail 'verification passed although a query returned NaN'
+  fi
+  grep -Fq 'returned NaN' "$test_dir/verify-nan-output.txt" || fail 'NaN failure reason was not printed'
 }
 
 test_beach_dashboard_matches_verification_queries() {
@@ -833,6 +861,8 @@ main() {
   test_observability_rerun_keeps_grafana_secret
   test_observability_verification_reports_targets_and_queries
   test_observability_verification_fails_on_down_target
+  test_observability_verification_sends_beach_traffic_before_queries
+  test_observability_verification_fails_on_nan_result
   test_beach_dashboard_matches_verification_queries
   test_beach_dashboard_is_provisioned_for_grafana_sidecar
   test_kubeconfig_files_are_ignored

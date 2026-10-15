@@ -3,6 +3,9 @@ set -Eeuo pipefail
 
 source "$(dirname "${BASH_SOURCE[0]}")/lib/ssm.sh"
 
+# rate() 창 안에 HTTP 지표가 남도록 트래픽을 보낸 뒤 scrape 두 번(30s 간격)을 기다린다.
+readonly scrape_wait_seconds="${OBSERVABILITY_SCRAPE_WAIT_SECONDS:-65}"
+
 main() {
   require_tools
 
@@ -18,6 +21,14 @@ set -Eeuo pipefail
 export KUBECONFIG=/root/.kube/config
 prometheus_api=/api/v1/namespaces/monitoring/services/http:kube-prometheus-stack-prometheus:9090/proxy/api/v1
 echo '$queries_encoded' | base64 -d > /tmp/promql-queries.tsv
+
+echo '== beach traffic'
+beach_ip=\"\$(kubectl -n beach get svc beach -o jsonpath='{.spec.clusterIP}')\"
+for i in \$(seq 30); do
+  curl --fail --silent --show-error --output /dev/null --max-time 5 \"http://\$beach_ip/api/beaches\"
+done
+echo \"sent 30 requests, waiting ${scrape_wait_seconds}s for scrapes\"
+sleep '$scrape_wait_seconds'
 
 echo '== kubectl top node'
 kubectl top node
@@ -50,6 +61,8 @@ result = body['data']['result']
 print(name + '\t' + json.dumps(result, separators=(',', ':')))
 if body['status'] != 'success' or not result:
     sys.exit(name + ' returned no data')
+if any(r['value'][1] == 'NaN' for r in result):
+    sys.exit(name + ' returned NaN')
 PY
 done 3< /tmp/promql-queries.tsv
 "
