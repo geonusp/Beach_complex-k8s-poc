@@ -136,9 +136,68 @@ EOF
   rm -rf "$test_dir"
 }
 
+test_load_runner_keeps_deployment_and_applies_rate() {
+  local test_dir bin_dir parameters_file remote_script
+  test_dir="$(mktemp -d)"
+  bin_dir="$test_dir/bin"
+  parameters_file="$test_dir/parameters"
+  remote_script="$test_dir/remote.sh"
+  mkdir -p "$bin_dir"
+
+  cat > "$bin_dir/terraform" <<'EOF'
+#!/usr/bin/env bash
+[[ "${*: -1}" == control_plane_instance_id ]] && printf 'i-control-plane\n'
+EOF
+  cat > "$bin_dir/aws" <<'EOF'
+#!/usr/bin/env bash
+set -Eeuo pipefail
+case "$1 $2" in
+  'ssm send-command')
+    while (($#)); do
+      [[ "$1" == '--parameters' ]] && printf '%s' "$2" > "$AWS_PARAMETERS_FILE"
+      shift
+    done
+    printf 'command-1\n'
+    ;;
+  'ssm get-command-invocation')
+    if [[ "$*" == *'StandardOutputContent'* ]]; then printf 'remote output\n'; else printf 'Success\n'; fi
+    ;;
+esac
+EOF
+  chmod +x "$bin_dir/terraform" "$bin_dir/aws"
+
+  if PATH="$bin_dir:$PATH" AWS_PARAMETERS_FILE="$parameters_file" SSM_POLL_INTERVAL_SECONDS=0 \
+    bash "$script_dir/run-load.sh" 0 300 >/dev/null 2>&1; then
+    fail 'load runner accepted a zero request rate'
+  fi
+
+  PATH="$bin_dir:$PATH" AWS_PARAMETERS_FILE="$parameters_file" SSM_POLL_INTERVAL_SECONDS=0 \
+    bash "$script_dir/run-load.sh" 5 300 >/dev/null
+
+  local parameters encoded
+  parameters="$(cat "$parameters_file")"
+  encoded="${parameters#commands=echo }"
+  encoded="${encoded% | base64 -d | bash}"
+  printf '%s' "$encoded" | base64 --decode > "$remote_script"
+
+  assert_contains "s/value: \"1\"/value: \"5\"/" "$remote_script"
+  assert_contains "s/value: \"2m\"/value: \"300s\"/" "$remote_script"
+  assert_contains 'kubectl -n beach apply -f' "$remote_script"
+  assert_contains 'kubectl -n beach wait --for=condition=complete job/beach-k6-rollout --timeout=480s' "$remote_script"
+  assert_contains 'load_started=' "$remote_script"
+  assert_contains 'load_finished=' "$remote_script"
+  # --out json 원본은 수만 줄이라 SSM 출력에서 뺀다. 요약 JSON만 남긴다.
+  assert_contains '!/^\{"metric":/' "$remote_script"
+  if grep -Fq 'set image' "$remote_script"; then
+    fail 'load runner must not change the Beach Deployment image'
+  fi
+  rm -rf "$test_dir"
+}
+
 main() {
   test_loadtest_assets_are_pinned_and_scheduled
   test_runner_embeds_remote_experiment_contract
+  test_load_runner_keeps_deployment_and_applies_rate
   printf 'PASS rollout experiment tests\n'
 }
 
