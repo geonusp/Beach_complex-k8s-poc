@@ -153,7 +153,7 @@ Grafana limit은 실클러스터에서 256Mi일 때 OOMKilled가 3회 발생해 
 
 ## 원본 증거
 
-- [verification.txt](verification.txt): `verify-observability.sh` 출력. SHA-256 `87f731a5d52311402fc351a7b56fb3c73977fbcf5fb8db4b38b818892b180e03`.
+- [verification.txt](verification.txt): `verify-observability.sh` 출력. SHA-256 `7ec034c94e261f181b4fab11c6b1ec84808d8eb648e6781c08c057dcc5471776`.
 - [k6-summary.json](k6-summary.json): k6 `handleSummary` 요약 한 줄. SHA-256 `c2d30b529bbb9b8c6deb76e5b888a46d5d241ce93989286c40c20a1cc268cb3c`.
 - [beach-overview-load.png](beach-overview-load.png): Grafana `Beach Overview` 캡처. SHA-256 `4549fd3c03f0aa6884fa56639da58475a14c75940035f9b0d7812070d96d73b7`.
 - k6 전체 출력(진행 로그, 요청 단위 원본 JSON 포함, 6.7MB)의 로컬 회수 위치: `deploy/k8s/loadtest/results/load/20261015T191130Z-9404/remote-output.txt` (`.gitignore` 대상). SSM S3 출력 prefix는 `rollout/load/20261015T191130Z-9404/`이다.
