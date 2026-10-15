@@ -146,8 +146,13 @@ test_load_runner_keeps_deployment_and_applies_rate() {
 
   cat > "$bin_dir/terraform" <<'EOF'
 #!/usr/bin/env bash
-[[ "${*: -1}" == control_plane_instance_id ]] && printf 'i-control-plane\n'
+case "${*: -1}" in
+  control_plane_instance_id) printf 'i-control-plane\n' ;;
+  experiment_results_bucket_name) printf 'beach-test-results\n' ;;
+  *) exit 1 ;;
+esac
 EOF
+  # SSM 인라인 출력은 잘리므로 전체 출력은 S3에서 받는다. 가짜 S3 객체에는 진행 로그·원본 JSON·요약이 섞여 있다.
   cat > "$bin_dir/aws" <<'EOF'
 #!/usr/bin/env bash
 set -Eeuo pipefail
@@ -155,24 +160,39 @@ case "$1 $2" in
   'ssm send-command')
     while (($#)); do
       [[ "$1" == '--parameters' ]] && printf '%s' "$2" > "$AWS_PARAMETERS_FILE"
+      [[ "$1" == '--output-s3-key-prefix' ]] && printf '%s' "$2" > "$AWS_PREFIX_FILE"
       shift
     done
     printf 'command-1\n'
     ;;
   'ssm get-command-invocation')
-    if [[ "$*" == *'StandardOutputContent'* ]]; then printf 'remote output\n'; else printf 'Success\n'; fi
+    if [[ "$*" == *'StandardOutputUrl'* ]]; then
+      printf 'https://s3.us-east-1.amazonaws.com/beach-test-results/rollout/load/x/stdout\n'
+    else
+      printf 'Success\n'
+    fi
+    ;;
+  's3 cp')
+    printf 'load_started=2026-10-15T18:48:51Z\n'
+    printf 'running (0m01.0s), 01/02 VUs, 5 complete and 0 interrupted iterations\n'
+    printf 'rollout   [   0%% ] 01/02 VUs  0m01.0s/5m0s  5.00 iters/s\n'
+    printf 'load_finished=2026-10-15T18:53:56Z\n'
+    printf '{"metric":"http_reqs","type":"Point"}\n'
+    printf '{"experiment":"rollout","requestRate":5}\n'
     ;;
 esac
 EOF
   chmod +x "$bin_dir/terraform" "$bin_dir/aws"
 
-  if PATH="$bin_dir:$PATH" AWS_PARAMETERS_FILE="$parameters_file" SSM_POLL_INTERVAL_SECONDS=0 \
+  if PATH="$bin_dir:$PATH" AWS_PARAMETERS_FILE="$parameters_file" AWS_PREFIX_FILE="$test_dir/prefix" \
+    SSM_POLL_INTERVAL_SECONDS=0 BEACH_LOAD_RESULT_DIR="$test_dir/results" \
     bash "$script_dir/run-load.sh" 0 300 >/dev/null 2>&1; then
     fail 'load runner accepted a zero request rate'
   fi
 
-  PATH="$bin_dir:$PATH" AWS_PARAMETERS_FILE="$parameters_file" SSM_POLL_INTERVAL_SECONDS=0 \
-    bash "$script_dir/run-load.sh" 5 300 >/dev/null
+  PATH="$bin_dir:$PATH" AWS_PARAMETERS_FILE="$parameters_file" AWS_PREFIX_FILE="$test_dir/prefix" \
+    SSM_POLL_INTERVAL_SECONDS=0 BEACH_LOAD_RESULT_DIR="$test_dir/results" \
+    bash "$script_dir/run-load.sh" 5 300 smoke > "$test_dir/terminal.txt"
 
   local parameters encoded
   parameters="$(cat "$parameters_file")"
@@ -184,30 +204,18 @@ EOF
   assert_contains "s/value: \"2m\"/value: \"300s\"/" "$remote_script"
   assert_contains 'kubectl -n beach apply -f' "$remote_script"
   assert_contains 'kubectl -n beach wait --for=condition=complete job/beach-k6-rollout --timeout=480s' "$remote_script"
-
-  # 진행 로그와 --out json 원본이 SSM 인라인 출력 한도를 넘기므로 요약 JSON 한 줄만 남아야 한다.
-  cat > "$bin_dir/kubectl" <<'EOF'
-#!/usr/bin/env bash
-case "$*" in
-  *' logs '*)
-    printf 'running (0m01.0s), 01/02 VUs, 5 complete and 0 interrupted iterations\n'
-    printf 'rollout   [   0%% ] 01/02 VUs  0m01.0s/5m0s  5.00 iters/s\n'
-    printf '{"metric":"http_reqs","type":"Point"}\n'
-    printf '{"experiment":"rollout","requestRate":5}\n'
-    ;;
-  *' get pods '*) printf 'beach-k6-rollout-abcde' ;;
-esac
-EOF
-  chmod +x "$bin_dir/kubectl"
-  PATH="$bin_dir:$PATH" bash "$remote_script" > "$test_dir/remote-output.txt"
-  assert_contains 'load_started=' "$test_dir/remote-output.txt"
-  assert_contains 'load_finished=' "$test_dir/remote-output.txt"
-  assert_contains '{"experiment":"rollout","requestRate":5}' "$test_dir/remote-output.txt"
-  if grep -Eq '^running \(|^rollout +\[|^\{"metric":' "$test_dir/remote-output.txt"; then
-    fail 'k6 progress lines or raw JSON must not be printed'
-  fi
   if grep -Fq 'set image' "$remote_script"; then
     fail 'load runner must not change the Beach Deployment image'
+  fi
+
+  [[ "$(cat "$test_dir/prefix")" == 'rollout/load/smoke' ]] || fail 'SSM output must go to the rollout/load prefix'
+  assert_contains 'running (0m01.0s)' "$test_dir/results/smoke/remote-output.txt"
+  assert_contains '{"metric":"http_reqs"' "$test_dir/results/smoke/remote-output.txt"
+  assert_contains 'load_started=2026-10-15T18:48:51Z' "$test_dir/terminal.txt"
+  assert_contains 'load_finished=2026-10-15T18:53:56Z' "$test_dir/terminal.txt"
+  assert_contains '{"experiment":"rollout","requestRate":5}' "$test_dir/terminal.txt"
+  if grep -Eq '^running \(|^rollout +\[|^\{"metric":' "$test_dir/terminal.txt"; then
+    fail 'terminal output must show only the load window and k6 summary'
   fi
   rm -rf "$test_dir"
 }
