@@ -184,10 +184,28 @@ EOF
   assert_contains "s/value: \"2m\"/value: \"300s\"/" "$remote_script"
   assert_contains 'kubectl -n beach apply -f' "$remote_script"
   assert_contains 'kubectl -n beach wait --for=condition=complete job/beach-k6-rollout --timeout=480s' "$remote_script"
-  assert_contains 'load_started=' "$remote_script"
-  assert_contains 'load_finished=' "$remote_script"
-  # --out json 원본은 수만 줄이라 SSM 출력에서 뺀다. 요약 JSON만 남긴다.
-  assert_contains '!/^\{"metric":/' "$remote_script"
+
+  # 진행 로그와 --out json 원본이 SSM 인라인 출력 한도를 넘기므로 요약 JSON 한 줄만 남아야 한다.
+  cat > "$bin_dir/kubectl" <<'EOF'
+#!/usr/bin/env bash
+case "$*" in
+  *' logs '*)
+    printf 'running (0m01.0s), 01/02 VUs, 5 complete and 0 interrupted iterations\n'
+    printf 'rollout   [   0%% ] 01/02 VUs  0m01.0s/5m0s  5.00 iters/s\n'
+    printf '{"metric":"http_reqs","type":"Point"}\n'
+    printf '{"experiment":"rollout","requestRate":5}\n'
+    ;;
+  *' get pods '*) printf 'beach-k6-rollout-abcde' ;;
+esac
+EOF
+  chmod +x "$bin_dir/kubectl"
+  PATH="$bin_dir:$PATH" bash "$remote_script" > "$test_dir/remote-output.txt"
+  assert_contains 'load_started=' "$test_dir/remote-output.txt"
+  assert_contains 'load_finished=' "$test_dir/remote-output.txt"
+  assert_contains '{"experiment":"rollout","requestRate":5}' "$test_dir/remote-output.txt"
+  if grep -Eq '^running \(|^rollout +\[|^\{"metric":' "$test_dir/remote-output.txt"; then
+    fail 'k6 progress lines or raw JSON must not be printed'
+  fi
   if grep -Fq 'set image' "$remote_script"; then
     fail 'load runner must not change the Beach Deployment image'
   fi

@@ -48,9 +48,9 @@ echo \"load_started=\$(date -u +%Y-%m-%dT%H:%M:%SZ)\"
 kubectl -n $namespace wait --for=condition=complete job/beach-k6-rollout --timeout=$((duration + k6_wait_margin_seconds))s
 echo \"load_finished=\$(date -u +%Y-%m-%dT%H:%M:%SZ)\"
 
-# --out json 원본은 수만 줄이라 SSM 출력에서 뺀다. 요약 JSON만 남긴다.
+# 진행 로그와 --out json 원본은 SSM 인라인 출력 한도를 넘기므로 handleSummary 요약 한 줄만 출력한다.
 k6_pod=\"\$(kubectl -n $namespace get pods -l job-name=beach-k6-rollout -o jsonpath='{.items[0].metadata.name}')\"
-kubectl -n $namespace logs \"\$k6_pod\" -c k6 | awk '!/^\\{\"metric\":/'
+kubectl -n $namespace logs \"\$k6_pod\" -c k6 | grep '^{\"experiment\":'
 "
 
   log 'k6 load completed'
