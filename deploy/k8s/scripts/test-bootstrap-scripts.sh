@@ -629,6 +629,182 @@ test_management_port_is_not_exposed_outside_pods() {
   fi
 }
 
+assert_yaml_component_disabled() {
+  local component="$1"
+  local values_file="$2"
+
+  grep -A1 -x "$component:" "$values_file" | grep -Fxq '  enabled: false' \
+    || fail "$component is not disabled in $values_file"
+}
+
+test_observability_values_fit_the_observability_node() {
+  local values="$repo_root/deploy/k8s/observability/kube-prometheus-stack-values.yaml"
+  local podmonitor="$repo_root/deploy/k8s/observability/beach-podmonitor.yaml"
+  local component line
+
+  for component in alertmanager kubeEtcd kubeScheduler kubeControllerManager kubeProxy; do
+    assert_yaml_component_disabled "$component" "$values"
+  done
+  for line in '    retention: 2d' '    retentionSize: 5GB' '    scrapeInterval: 30s' \
+    '    podMonitorSelectorNilUsesHelmValues: false' '    existingSecret: grafana-admin'; do
+    grep -Fxq -- "$line" "$values" || fail "missing values line: $line"
+  done
+  [[ "$(grep -c 'node-role: observability' "$values")" == '5' ]] \
+    || fail 'operator, webhook job, Prometheus, Grafana and kube-state-metrics must all target obs-1'
+  if grep -Eq 'storageSpec|adminPassword' "$values"; then
+    fail 'Prometheus must use emptyDir and Grafana must not carry a password in values'
+  fi
+
+  grep -Fxq '    - port: management' "$podmonitor" || fail 'PodMonitor must scrape the management port'
+  grep -Fxq '      path: /actuator/prometheus' "$podmonitor" || fail 'PodMonitor path is wrong'
+}
+
+run_install_observability() {
+  local name="$1"
+  local secret_exists="$2"
+  local bin_dir="$test_dir/$name-bin"
+  local parameters_file="$test_dir/$name-parameters"
+  local remote_script="$test_dir/$name-remote.sh"
+
+  write_fake_tools "$bin_dir"
+  cat > "$bin_dir/helm" <<'EOF'
+#!/usr/bin/env bash
+printf '%s\n' "$*" >> "$HELM_LOG"
+EOF
+  cat > "$bin_dir/kubectl" <<'EOF'
+#!/usr/bin/env bash
+printf '%s\n' "$*" >> "$KUBECTL_LOG"
+if [[ "$*" == '-n monitoring get secret grafana-admin' ]]; then
+  [[ "$GRAFANA_SECRET_EXISTS" == 'true' ]]
+fi
+EOF
+  chmod +x "$bin_dir/helm" "$bin_dir/kubectl"
+
+  PATH="$bin_dir:$PATH" AWS_PARAMETERS_FILE="$parameters_file" \
+    bash "$script_dir/install-observability.sh" >/dev/null
+  decode_remote_script "$parameters_file" "$remote_script"
+  PATH="$bin_dir:$PATH" HELM_LOG="$test_dir/$name-helm.log" KUBECTL_LOG="$test_dir/$name-kubectl.log" \
+    GRAFANA_SECRET_EXISTS="$secret_exists" bash "$remote_script" >/dev/null
+}
+
+test_observability_stack_is_installed_with_generated_grafana_secret() {
+  run_install_observability observability-new false
+
+  assert_file_equals 'repo add prometheus-community https://prometheus-community.github.io/helm-charts --force-update
+repo update
+upgrade --install kube-prometheus-stack prometheus-community/kube-prometheus-stack --version 91.9.0 --namespace monitoring --values /tmp/kube-prometheus-stack-values.yaml --wait --timeout 10m' \
+    "$test_dir/observability-new-helm.log"
+  grep -Eq '^-n monitoring create secret generic grafana-admin --from-literal=admin-user=admin --from-literal=admin-password=.{20,}$' \
+    "$test_dir/observability-new-kubectl.log" || fail 'Grafana admin Secret was not generated'
+  grep -Fxq 'apply -f /tmp/beach-podmonitor.yaml' "$test_dir/observability-new-kubectl.log" \
+    || fail 'Beach PodMonitor was not applied'
+}
+
+test_observability_rerun_keeps_grafana_secret() {
+  run_install_observability observability-rerun true
+
+  if grep -Fq 'create secret' "$test_dir/observability-rerun-kubectl.log"; then
+    fail 'existing Grafana admin Secret was replaced'
+  fi
+}
+
+run_verify_observability() {
+  local name="$1"
+  local targets_json="$2"
+  local query_value="${3:-1}"
+  local bin_dir="$test_dir/$name-bin"
+  local parameters_file="$test_dir/$name-parameters"
+  local remote_script="$test_dir/$name-remote.sh"
+
+  write_fake_tools "$bin_dir"
+  printf '%s' "$targets_json" > "$test_dir/$name-targets.json"
+  cat > "$bin_dir/kubectl" <<'EOF'
+#!/usr/bin/env bash
+printf 'kubectl %s\n' "$*" >> "$CALL_LOG"
+case "$*" in
+  *'/api/v1/targets'*) cat "$TARGETS_JSON" ;;
+  *'/api/v1/query'*) printf '{"status":"success","data":{"resultType":"vector","result":[{"metric":{},"value":[0,"%s"]}]}}' "$QUERY_VALUE" ;;
+  '-n beach get svc beach -o jsonpath={.spec.clusterIP}') printf '10.96.0.20' ;;
+  *) printf 'fake %s\n' "$*" ;;
+esac
+EOF
+  cat > "$bin_dir/curl" <<'EOF'
+#!/usr/bin/env bash
+printf 'curl %s\n' "${!#}" >> "$CALL_LOG"
+EOF
+  chmod +x "$bin_dir/kubectl" "$bin_dir/curl"
+
+  PATH="$bin_dir:$PATH" AWS_PARAMETERS_FILE="$parameters_file" OBSERVABILITY_SCRAPE_WAIT_SECONDS=0 \
+    bash "$script_dir/verify-observability.sh" >/dev/null
+  decode_remote_script "$parameters_file" "$remote_script"
+  PATH="$bin_dir:$PATH" TARGETS_JSON="$test_dir/$name-targets.json" QUERY_VALUE="$query_value" \
+    CALL_LOG="$test_dir/$name-calls.log" bash "$remote_script" > "$test_dir/$name-output.txt" 2>&1
+}
+
+test_observability_verification_reports_targets_and_queries() {
+  run_verify_observability verify-up \
+    '{"data":{"activeTargets":[{"labels":{"job":"beach"},"health":"up","scrapeUrl":"http://10.244.1.5:8081/actuator/prometheus","lastError":""}]}}' \
+    || fail 'verification failed although every target was up'
+
+  grep -Fq "$(printf 'beach\tup\thttp://10.244.1.5:8081/actuator/prometheus')" "$test_dir/verify-up-output.txt" \
+    || fail 'target line was not printed'
+  grep -Fq "$(printf 'http_p95_seconds\t[')" "$test_dir/verify-up-output.txt" \
+    || fail 'PromQL results were not printed'
+}
+
+test_observability_verification_fails_on_down_target() {
+  if run_verify_observability verify-down \
+    '{"data":{"activeTargets":[{"labels":{"job":"kube-proxy"},"health":"down","scrapeUrl":"http://10.0.1.10:10249/metrics","lastError":"connection refused"}]}}'; then
+    fail 'verification passed although a target was down'
+  fi
+}
+
+test_observability_verification_sends_beach_traffic_before_queries() {
+  run_verify_observability verify-traffic \
+    '{"data":{"activeTargets":[{"labels":{"job":"beach"},"health":"up","scrapeUrl":"http://10.244.1.5:8081/actuator/prometheus","lastError":""}]}}' \
+    || fail 'verification failed although every target was up'
+
+  local calls="$test_dir/verify-traffic-calls.log"
+  [[ "$(grep -cFx 'curl http://10.96.0.20/api/beaches' "$calls")" == '30' ]] \
+    || fail 'verification must send 30 requests to the Beach Service'
+  (( $(grep -nF 'curl ' "$calls" | tail -1 | cut -d: -f1) < $(grep -nF '/api/v1/query' "$calls" | head -1 | cut -d: -f1) )) \
+    || fail 'Beach traffic must be sent before PromQL queries'
+}
+
+test_observability_verification_fails_on_nan_result() {
+  if run_verify_observability verify-nan \
+    '{"data":{"activeTargets":[{"labels":{"job":"beach"},"health":"up","scrapeUrl":"http://10.244.1.5:8081/actuator/prometheus","lastError":""}]}}' \
+    NaN; then
+    fail 'verification passed although a query returned NaN'
+  fi
+  grep -Fq 'returned NaN' "$test_dir/verify-nan-output.txt" || fail 'NaN failure reason was not printed'
+}
+
+test_beach_dashboard_matches_verification_queries() {
+  local dashboard="$repo_root/deploy/k8s/observability/dashboards/beach-overview.json"
+  local queries="$repo_root/deploy/k8s/observability/promql-queries.tsv"
+
+  python3 - "$dashboard" "$queries" <<'PY' || fail 'Beach dashboard does not match promql-queries.tsv'
+import json, sys
+dashboard = json.load(open(sys.argv[1], encoding='utf-8'))
+queries = [line.rstrip('\n').split('\t')[1] for line in open(sys.argv[2], encoding='utf-8') if line.strip()]
+panels = dashboard['panels']
+exprs = [target['expr'] for panel in panels for target in panel['targets']]
+assert dashboard['uid'] == 'beach-overview', dashboard['uid']
+assert all(panel['datasource'] == {'type': 'prometheus', 'uid': 'prometheus'} for panel in panels)
+assert sorted(exprs) == sorted(queries), set(exprs) ^ set(queries)
+PY
+}
+
+test_beach_dashboard_is_provisioned_for_grafana_sidecar() {
+  run_install_observability observability-dashboard true
+
+  grep -Fxq -- '-n monitoring create configmap beach-dashboards --from-file=beach-overview.json=/tmp/beach-overview.json --dry-run=client -o yaml' \
+    "$test_dir/observability-dashboard-kubectl.log" || fail 'dashboard ConfigMap was not rendered'
+  grep -Fxq -- '-n monitoring label configmap beach-dashboards grafana_dashboard=1 --overwrite' \
+    "$test_dir/observability-dashboard-kubectl.log" || fail 'dashboard ConfigMap is not labelled for the Grafana sidecar'
+}
+
 test_kubeconfig_files_are_ignored() {
   git -C "$repo_root" check-ignore -q kubeconfig \
     || fail 'kubeconfig is not ignored'
@@ -638,18 +814,19 @@ test_kubeconfig_files_are_ignored() {
 
 test_provision_and_deploy_runs_steps_in_order() {
   local script="$repo_root/deploy/k8s/scripts/provision-and-deploy.sh"
-  local apply_line bootstrap_line ghcr_line dependencies_line beach_line destroy_line
+  local apply_line bootstrap_line ghcr_line dependencies_line beach_line observability_line destroy_line
 
   apply_line="$(grep -nF 'terraform -chdir=' "$script" | grep -F 'apply -auto-approve' | cut -d: -f1)"
   bootstrap_line="$(grep -nF 'bootstrap-cluster.sh' "$script" | head -n1 | cut -d: -f1)"
   ghcr_line="$(grep -nF 'sync-ghcr-secret.sh' "$script" | head -n1 | cut -d: -f1)"
   dependencies_line="$(grep -nF 'deploy-dependencies.sh' "$script" | head -n1 | cut -d: -f1)"
   beach_line="$(grep -nF 'deploy-beach.sh' "$script" | head -n1 | cut -d: -f1)"
+  observability_line="$(grep -nF 'install-observability.sh' "$script" | head -n1 | cut -d: -f1)"
   destroy_line="$(grep -nF 'destroy' "$script" | head -n1 | cut -d: -f1)"
 
-  [[ -n "$apply_line" && -n "$bootstrap_line" && -n "$ghcr_line" && -n "$dependencies_line" && -n "$beach_line" ]] \
+  [[ -n "$apply_line" && -n "$bootstrap_line" && -n "$ghcr_line" && -n "$dependencies_line" && -n "$beach_line" && -n "$observability_line" ]] \
     || fail 'provision-and-deploy.sh is missing a required deployment step'
-  ((apply_line < bootstrap_line && bootstrap_line < ghcr_line && ghcr_line < dependencies_line && dependencies_line < beach_line)) \
+  ((apply_line < bootstrap_line && bootstrap_line < ghcr_line && ghcr_line < dependencies_line && dependencies_line < beach_line && beach_line < observability_line)) \
     || fail 'provision-and-deploy.sh deployment steps are out of order'
   [[ -n "$destroy_line" ]] || fail 'provision-and-deploy.sh does not provide the destroy path'
 }
@@ -679,6 +856,15 @@ main() {
   test_dependencies_are_applied_on_the_control_plane
   test_beach_deployment_creates_runtime_secret_and_rolls_out
   test_management_port_is_not_exposed_outside_pods
+  test_observability_values_fit_the_observability_node
+  test_observability_stack_is_installed_with_generated_grafana_secret
+  test_observability_rerun_keeps_grafana_secret
+  test_observability_verification_reports_targets_and_queries
+  test_observability_verification_fails_on_down_target
+  test_observability_verification_sends_beach_traffic_before_queries
+  test_observability_verification_fails_on_nan_result
+  test_beach_dashboard_matches_verification_queries
+  test_beach_dashboard_is_provisioned_for_grafana_sidecar
   test_kubeconfig_files_are_ignored
   test_provision_and_deploy_runs_steps_in_order
   printf 'PASS bootstrap script tests\n'

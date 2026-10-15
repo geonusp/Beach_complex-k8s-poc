@@ -1,0 +1,74 @@
+# obs-1(t3.medium, 메모리 4GiB)에 맞춘 축소 구성. 근거는 docs/adr/observability-stack-installation.md
+# 알림은 범위 밖이다.
+defaultRules:
+  create: false
+alertmanager:
+  enabled: false
+
+# kubeadm은 아래 구성요소의 metrics를 127.0.0.1에만 바인드한다. 켜 두면 target이 down이 된다.
+kubeEtcd:
+  enabled: false
+kubeScheduler:
+  enabled: false
+kubeControllerManager:
+  enabled: false
+kubeProxy:
+  enabled: false
+
+prometheusOperator:
+  nodeSelector:
+    node-role: observability
+  admissionWebhooks:
+    patch:
+      nodeSelector:
+        node-role: observability
+  resources:
+    requests:
+      cpu: 50m
+      memory: 64Mi
+    limits:
+      memory: 128Mi
+
+prometheus:
+  prometheusSpec:
+    nodeSelector:
+      node-role: observability
+    scrapeInterval: 30s
+    evaluationInterval: 30s
+    # 단명 클러스터라 TSDB는 emptyDir에 두고 클러스터와 함께 버린다. 증거는 verify-observability.sh로 회수한다.
+    retention: 2d
+    retentionSize: 5GB
+    # 차트 release 라벨이 없는 PodMonitor도 선택한다.
+    podMonitorSelectorNilUsesHelmValues: false
+    resources:
+      requests:
+        cpu: 200m
+        memory: 512Mi
+      limits:
+        memory: 1536Mi
+
+grafana:
+  nodeSelector:
+    node-role: observability
+  # 비밀번호는 install-observability.sh가 Control Plane에서 생성한 Secret에만 둔다.
+  admin:
+    existingSecret: grafana-admin
+    userKey: admin-user
+    passwordKey: admin-password
+  # 실클러스터에서 256Mi limit은 OOMKilled, 512Mi limit은 평상시 488Mi로 한계에 붙었다.
+  resources:
+    requests:
+      cpu: 50m
+      memory: 512Mi
+    limits:
+      memory: 1Gi
+
+kube-state-metrics:
+  nodeSelector:
+    node-role: observability
+  resources:
+    requests:
+      cpu: 20m
+      memory: 64Mi
+    limits:
+      memory: 128Mi
