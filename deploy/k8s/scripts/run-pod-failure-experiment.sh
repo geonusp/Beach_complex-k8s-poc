@@ -19,6 +19,9 @@ set +e
 set -Eeuo pipefail
 export KUBECONFIG=/root/.kube/config
 k=(kubectl --request-timeout=5s -n beach)
+run_suffix="${work_dir##*/}"
+job_name="beach-k6-failure-${run_suffix##*.}"
+job_name="${job_name,,}"
 job_created=false
 injected=false
 collector_pid=''
@@ -42,18 +45,18 @@ finish() {
   fi
   if [[ "$job_created" == true ]]; then
     remaining=$((job_deadline - $(date -u +%s)))
-    if ! "${k[@]}" wait --for=condition=complete job/beach-k6-failure --timeout="$((remaining > 0 ? remaining : 1))s"; then status=1; fi
+    if ! "${k[@]}" wait --for=condition=complete "job/$job_name" --timeout="$((remaining > 0 ? remaining : 1))s"; then status=1; fi
     if [[ -n "$collector_pid" ]]; then
       timeout 10s tail --pid="$collector_pid" -f /dev/null || { kill "$collector_pid" 2>/dev/null || true; status=1; }
       wait "$collector_pid" || status=1
       cat "$work_dir/k6.log" || status=1
     else
-      "${k[@]}" logs job/beach-k6-failure -c k6 || status=1
+      "${k[@]}" logs "job/$job_name" -c k6 || status=1
     fi
   fi
   "${k[@]}" get events --sort-by=.metadata.creationTimestamp || true
   echo "remote_work_dir=$work_dir"
-  echo 'Preserved Job/ConfigMap: beach-k6-failure; collect logs before deleting them or destroying the cluster.'
+  echo "Preserved Job/ConfigMap: $job_name; collect logs before deleting them or destroying the cluster."
   exit "$status"
 }
 trap finish EXIT
@@ -66,20 +69,21 @@ baseline="$(check_state)"
 read -r target old_uid target_node <<< "$(head -n1 <<< "$baseline")"
 read -r _ survivor_uid _ <<< "$(tail -n1 <<< "$baseline")"
 echo "target=$target uid=$old_uid node=$target_node"
-"${k[@]}" create configmap beach-k6-failure --from-file="$work_dir/failure.js"
-"${k[@]}" create -f "$work_dir/k6-failure-job.yaml"
+"${k[@]}" create configmap "$job_name" --from-file="$work_dir/failure.js"
+sed "s/beach-k6-failure/$job_name/g" "$work_dir/k6-failure-job.yaml" > "$work_dir/run-job.yaml"
+"${k[@]}" create -f "$work_dir/run-job.yaml"
 job_created=true
 job_deadline=$(($(date -u +%s) + 480))
 start_deadline=$(($(date -u +%s) + 60))
 started=''
 while [[ -z "$started" && $(date -u +%s) -lt "$start_deadline" ]]; do
-  started="$("${k[@]}" logs job/beach-k6-failure -c k6 2>/dev/null | python3 "$work_dir/failure_results.py" started)" || true
+  started="$("${k[@]}" logs "job/$job_name" -c k6 2>/dev/null | python3 "$work_dir/failure_results.py" started)" || true
   [[ -n "$started" ]] || sleep 2
 done
 [[ -n "$started" ]] || { echo 'ERROR: k6 did not send requests'; exit 1; }
 echo "load_started=$started"
 # Stream continuously to the CP file so kubelet log rotation cannot discard early raw samples.
-kubectl -n beach logs --follow --request-timeout=0 job/beach-k6-failure -c k6 > "$work_dir/k6.log" 2>&1 &
+kubectl -n beach logs --follow --request-timeout=0 "job/$job_name" -c k6 > "$work_dir/k6.log" 2>&1 &
 collector_pid=$!
 baseline_end=$(($(date -u -d "$started" +%s) + 121))
 while [[ $(date -u +%s) -lt "$baseline_end" ]]; do snapshot; sleep 2; done
@@ -106,7 +110,7 @@ done
 while [[ $(date -u +%s) -lt "$job_deadline" ]]; do
   snapshot
   check_state "$old_uid" "$survivor_uid"
-  [[ "$("${k[@]}" get job beach-k6-failure -o jsonpath='{.status.succeeded}')" != 1 ]] || break
+  [[ "$("${k[@]}" get job "$job_name" -o jsonpath='{.status.succeeded}')" != 1 ]] || break
   sleep 2
 done
 ) 2>&1
@@ -122,6 +126,11 @@ done
 log "running Pod failure experiment on $control_plane_id; results: $result_dir"
 if ! ssm_run "$control_plane_id" "$payload"$'\n'"$remote_script" "$results_bucket" "rollout/issue-6/$label" > "$result_dir/remote-output.txt" 2> "$result_dir/ssm-error.txt"; then
   fail "SSM execution/retrieval failed; inspect $result_dir and S3 rollout/issue-6/$label before retrying"
+fi
+remote_status="$(awk -F= '/^experiment_exit_status=/ {status=$2} END {print status}' "$result_dir/remote-output.txt")"
+if [[ "$remote_status" != 0 ]]; then
+  grep -m1 -E '^(error:|Error|ERROR:|Traceback)' "$result_dir/remote-output.txt" >&2 || true
+  fail "remote experiment failed (exit ${remote_status:-missing}); preserved evidence: $result_dir"
 fi
 "$python_bin" "$repo_root/deploy/k8s/scripts/failure_results.py" summarize "$result_dir/remote-output.txt" > "$result_dir/phases.json" || fail "experiment incomplete; preserved evidence: $result_dir"
 log "Pod replacement and API recovery verified; results: $result_dir"
