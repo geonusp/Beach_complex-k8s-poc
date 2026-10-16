@@ -5,5 +5,5 @@ jvm_heap_used_bytes	sum by (pod) (jvm_memory_used_bytes{application="beach",area
 jvm_gc_pause_seconds_rate	sum by (pod) (rate(jvm_gc_pause_seconds_sum{application="beach"}[5m]))
 pod_cpu_cores	sum by (pod) (rate(container_cpu_usage_seconds_total{namespace="beach",container="beach"}[5m]))
 pod_memory_working_set_bytes	sum by (pod) (container_memory_working_set_bytes{namespace="beach",container="beach"})
-pod_restarts_total	sum by (pod) (kube_pod_container_status_restarts_total{namespace="beach"})
+pod_restarts_total	sum by (pod) (kube_pod_container_status_restarts_total{namespace="beach",pod!~"beach-k6-.*"})
 prometheus_head_series	prometheus_tsdb_head_series

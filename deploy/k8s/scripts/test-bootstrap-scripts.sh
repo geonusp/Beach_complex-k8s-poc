@@ -796,6 +796,23 @@ assert sorted(exprs) == sorted(queries), set(exprs) ^ set(queries)
 PY
 }
 
+# 실클러스터 캡처에서 드러난 표시 문제: 5xx 축 0~10000%, 시계열 수 축 라벨 중복, restart 범례의 k6 Job Pod.
+test_beach_dashboard_panels_render_readable_values() {
+  local dashboard="$repo_root/deploy/k8s/observability/dashboards/beach-overview.json"
+  local queries="$repo_root/deploy/k8s/observability/promql-queries.tsv"
+
+  python3 - "$dashboard" "$queries" <<'PY' || fail 'Beach dashboard panels do not render readable values'
+import json, sys
+panels = {panel['title']: panel for panel in json.load(open(sys.argv[1], encoding='utf-8'))['panels']}
+queries = dict(line.rstrip('\n').split('\t') for line in open(sys.argv[2], encoding='utf-8') if line.strip())
+ratio = panels['HTTP 5xx 비율']['fieldConfig']['defaults']
+assert (ratio.get('min'), ratio.get('max')) == (0, 1), ratio
+series = panels['Prometheus 시계열 수']['fieldConfig']['defaults']
+assert (series.get('unit'), series.get('decimals')) == ('none', 0), series
+assert 'pod!~"beach-k6-.*"' in queries['pod_restarts_total'], queries['pod_restarts_total']
+PY
+}
+
 test_beach_dashboard_is_provisioned_for_grafana_sidecar() {
   run_install_observability observability-dashboard true
 
@@ -864,6 +881,7 @@ main() {
   test_observability_verification_sends_beach_traffic_before_queries
   test_observability_verification_fails_on_nan_result
   test_beach_dashboard_matches_verification_queries
+  test_beach_dashboard_panels_render_readable_values
   test_beach_dashboard_is_provisioned_for_grafana_sidecar
   test_kubeconfig_files_are_ignored
   test_provision_and_deploy_runs_steps_in_order

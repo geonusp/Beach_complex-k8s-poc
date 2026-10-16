@@ -37,6 +37,7 @@
 | SSM 실험 결과 저장 | SSM 전체 출력과 k6 원본 JSON을 임시 비공개 S3 버킷으로 회수하고 Terraform destroy 시 제거 | Proposed | [ssm-run-command-output-storage](./ssm-run-command-output-storage.md) |
 | readiness 외부 의존성 정책 | 상시 readiness는 `readinessState`만 유지. 실험 시에만 환경변수로 Redis 포함 | Proposed | [readiness-dependency-policy](./readiness-dependency-policy.md) |
 | 관측 스택 설치 방식 | `kube-prometheus-stack` Helm 차트 축소 구성(Alertmanager·control plane scrape 제외)을 `obs-1`에 배치 | Proposed | [observability-stack-installation](./observability-stack-installation.md) |
+| Resource metrics 제공 방식 | Metrics Server를 `obs-1`에 배치하고 `--kubelet-insecure-tls` 대신 `serverTLSBootstrap` + kubelet-serving CSR 승인 | Proposed | [resource-metrics-provider](./resource-metrics-provider.md) |
 
 ## 5. 문서 템플릿
 
