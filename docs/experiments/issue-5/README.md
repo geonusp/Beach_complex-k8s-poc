@@ -94,7 +94,7 @@ Grafana의 요청량 패널도 부하 시작부터 5분 동안 0에서 5 req/s�
 
 ### 메모리: heap과 Pod working set의 차이
 
-heap 사용량은 77~90MB인데 Pod working set은 약 450MB다. Grafana에서 heap은 64~100MB 사이를 톱니 모양으로 오가고(young GC 주기), working set은 428~434MB 범위에서 거의 평평하다.
+heap 사용량은 77~90MB인데 Pod working set은 약 450MB다. Grafana에서 heap은 64~100MiB 사이를 톱니 모양으로 오가고(young GC 주기), working set은 428~434MiB 범위에서 거의 평평하다.
 차이는 heap 밖의 JVM 메모리(metaspace, code cache, 스레드 스택, direct buffer)와 GC가 확보해 둔 heap 영역, 컨테이너의 page cache 등이다. 이번 회차에서는 영역별 크기를 수집하지 않았으므로 구성 비율은 단정하지 않는다.
 따라서 Pod 메모리 사용률(HPA memory 기준이나 OOM 여유)은 heap이 아니라 working set으로 판단해야 한다.
 
