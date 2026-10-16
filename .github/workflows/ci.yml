@@ -69,6 +69,9 @@ jobs:
       - name: Test Kubernetes rollout experiment scripts
         run: bash deploy/k8s/scripts/test-rollout-experiment.sh
 
+      - name: Test Kubernetes failure experiment scripts
+        run: python3 -B -m unittest discover -s deploy/k8s/scripts -p 'test_*.py'
+
       - name: Validate Kubernetes IaC
         run: bash deploy/k8s/scripts/validate-iac.sh
 
