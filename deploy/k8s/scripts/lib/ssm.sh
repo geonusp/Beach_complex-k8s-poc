@@ -2,7 +2,7 @@
 # 이 파일은 단독 실행하지 않고 다른 스크립트에서 source 한다.
 
 readonly repo_root="$(cd "$(dirname "${BASH_SOURCE[0]}")/../../../.." && pwd)"
-readonly terraform_environment="$repo_root/deploy/k8s/terraform/environments/dev"
+readonly terraform_environment="${BEACH_TERRAFORM_ENVIRONMENT:-$repo_root/deploy/k8s/terraform/environments/dev}"
 readonly ssm_poll_interval_seconds="${SSM_POLL_INTERVAL_SECONDS:-5}"
 readonly ssm_command_timeout_seconds="${SSM_COMMAND_TIMEOUT_SECONDS:-900}"
 

@@ -10,6 +10,15 @@ import test_failure_experiment as fixtures
 
 
 class RunnerTests(unittest.TestCase):
+    def test_existing_terraform_environment_is_used_in_child_shell(self):
+        lib = pathlib.Path(__file__).parent / "lib" / "ssm.sh"
+        env = dict(os.environ, TEST_SSM_LIB=lib.resolve().as_posix(), BEACH_TERRAFORM_ENVIRONMENT="/tmp/existing dev")
+        bash = "C:/Program Files/Git/bin/bash.exe" if os.name == "nt" else shutil.which("bash")
+        child = 'source "$TEST_SSM_LIB"; terraform() { printf "%s\\n" "$@"; }; terraform_output control_plane_instance_id; terraform_output_json node_instance_ids'
+        result = subprocess.run([bash, "-c", 'exec "$BASH" -c "$1"', "test", child], env=env, text=True, capture_output=True, timeout=10)
+        self.assertEqual(result.returncode, 0, result.stderr)
+        self.assertEqual(result.stdout.splitlines(), ["-chdir=/tmp/existing dev", "output", "-raw", "control_plane_instance_id", "-chdir=/tmp/existing dev", "output", "-json", "node_instance_ids"])
+
     def test_real_remote_shell_checks_baseline_uid_and_preserves_failure_output(self):
         root = pathlib.Path(__file__).parent
         remote = (root / "run-pod-failure-experiment.sh").read_text().split("<<'REMOTE'\n", 1)[1].split("\nREMOTE", 1)[0]
