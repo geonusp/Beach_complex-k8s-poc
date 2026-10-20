@@ -19,7 +19,9 @@ Related #6. Pod 장애·공통 측정 단계다. 개발 클러스터에서 운�
 bash deploy/k8s/scripts/run-pod-failure-experiment.sh --confirm-dev
 ```
 
-실험을 동시에 실행하지 않는다. 결과 label을 재사용하지 않는다. Python 3 명령이 `python`인 환경에서는 명령 앞에 `PYTHON=python`을 지정한다.
+실험을 동시에 실행하지 않는다. 결과 label은 실험 회차 폴더명이며 재사용하지 않는다. Python 3 명령이 `python`인 환경에서는 runner 명령 앞에 `PYTHON=python`을 지정한다.
+
+Windows Git Bash에서 Python 단위 테스트는 별도 전제가 있다. 테스트가 실행하는 자식 Bash와 fixture는 `python3` 실행 파일을 PATH에서 찾으므로, 부모 셸의 alias·함수 또는 runner의 `PYTHON=python`만으로는 해결되지 않는다. `python3` PATH 래퍼를 둔 환경에서 전체 8개가 통과했다. 테스트의 `PYTHON` 지원은 이번 변경에 추가하지 않았다.
 
 ## 실행 이력
 
@@ -66,19 +68,24 @@ p95/p99는 실패 요청도 포함하는 `http_req_duration` 시각 표본에 ne
 
 원본은 저장소에서 제외되는 `deploy/k8s/loadtest/results/issue-6/<label>/`에 있다. `phases-20261016.json`, `phases-20261020.json`은 각 성공 회차의 집계 사본이다. 최신 원본 파일은 21,196,704바이트이며 Git에는 넣지 않았다.
 
-| 파일 (최신 label 아래) | SHA-256 |
-| --- | --- |
-| `remote-output.txt` | `b6b5fe45608c1dfb012f57b859b45f2a3cb3b401dc7676e9a3a398d93060150c` |
-| `phases.json` | `d7b013265fd3c3c3a8c5fb422f375beeac9963dc00a366f293945bb84a26a645` |
-| `observability.txt` | `5f888e87108fcbd8ca007b93f4c3f350c91640de294eee8096337b186c217e98` |
+| 실험 회차 폴더명 | 파일 | SHA-256 |
+| --- | --- | --- |
+| `20261016T173353Z-15583` | `remote-output.txt` | `633ecfb55b685df2af2cf0b37bf804ebd2b81ef25d1158c54f148674bfb98977` |
+| `20261016T173353Z-15583` | `phases.json` | `271f2dfdd2ba65c1a7372237af9634ad8d674ff3ce08e6914f05d514d669b793` |
+| `20261016T173353Z-15583` | `observability.txt` | `18f6458b9a720877db818fdcd712d542b1feeb954405955c3754fcf26109d806` |
+| `20261020T124057Z-20284` | `remote-output.txt` | `b6b5fe45608c1dfb012f57b859b45f2a3cb3b401dc7676e9a3a398d93060150c` |
+| `20261020T124057Z-20284` | `phases.json` | `d7b013265fd3c3c3a8c5fb422f375beeac9963dc00a366f293945bb84a26a645` |
+| `20261020T124057Z-20284` | `observability.txt` | `5f888e87108fcbd8ca007b93f4c3f350c91640de294eee8096337b186c217e98` |
 
-`ssm-error.txt`는 0바이트다.
+두 성공 회차의 `ssm-error.txt`는 모두 0바이트다.
 
 ```bash
 python deploy/k8s/scripts/failure_results.py summarize deploy/k8s/loadtest/results/issue-6/20261020T124057Z-20284/remote-output.txt
 ```
 
-S3 `rollout/issue-6/<label>/`는 임시 전송 위치이며 Terraform destroy 시 삭제된다. 로컬 원본을 별도 장기 보관 위치로 옮긴 뒤 클러스터를 제거한다. 영구 외부 보관 위치는 아직 확정하지 않았다.
+S3 `rollout/issue-6/<label>/`는 임시 전송 위치이며 Terraform destroy 시 삭제된다. 두 성공 회차의 모든 결과 파일을 각각 `<label>.tar.gz`로 압축해 `C:/Users/pro/.buzz/OUTBOX/ISSUE_6_RAW_EVIDENCE_20261020/`에 별도 보관했다. 각 보관본을 다시 읽어 압축 전 파일별 SHA-256과 일치하는지 확인했다. 같은 폴더의 `MANIFEST.json`에 생성 UTC 시각, 원본 경로, 파일별 해시, 압축본 크기·해시를 기록했다.
+
+이는 같은 PC의 로컬 추가 사본이며 PR 독자가 내려받을 수 있는 외부 보관본은 아니다. destroy나 로컬 원본 정리 전에 두 압축본과 manifest를 영구 외부 보관 위치에 복사하고 다운로드·해시 일치를 확인해야 한다. 외부 보관 위치와 독자 접근 경로는 아직 미확정이다.
 
 ## 실패 시 확인
 
@@ -88,9 +95,11 @@ S3 `rollout/issue-6/<label>/`는 임시 전송 위치이며 Terraform destroy �
 
 - 5 req/s·단일 경로 Pod 실험이다. 고부하·통계적 편차·여러 runner 동시 실행 검증은 PR 1의 추가 완료 조건이 아니다.
 - polling sleep은 2초지만 API 호출·처리 시간이 추가된다. Ready 관찰 시각은 실제 전환 시각과 다르다. API 객체 강제 삭제는 기존 컨테이너 프로세스 종료 증거가 아니다.
+- 이번 증거는 Pod API 강제 삭제 후 교체·복구와 해당 부하에서 관측한 사용자 영향이다. 프로세스 즉사·진행 중 요청 보존·Node 장애 내성을 입증하지 않는다. Pod별 요청 수와 실제 프로세스 종료 시각은 기록하지 않아 실패 0건의 원인을 확정할 수 없다. Node 장애·다른 Worker 재배치는 PR 2에서 별도로 검증하며 프로세스 크래시 실험은 PR 2 범위로 추가하지 않는다.
+- t0·replacement_ready는 Control Plane의 `date`, k6 요청 표본은 obs-1의 k6 Pod 시계다. 노드 간 시계 오차와 실험 당시 시간 동기화 상태는 미검증이며 오프셋이 있으면 구간별 요청·오류·latency 귀속이 달라질 수 있다. 64.56초의 두 관찰 시각은 모두 Control Plane 시계지만 실제 전환 시각은 아니다.
 - 단일 Control Plane이므로 클러스터 전체 HA 검증이 아니다. Node 감지·다른 Worker 재배치는 PR 2 범위다.
 - 이번 Grafana 화면은 아직 첨부하지 않았다. 수치는 저장한 k6 원본과 Kubernetes snapshot에 근거한다.
-- 원본은 Git에서 받을 수 없는 로컬 파일이다. 이 문서와 요약 사본은 사용자 검토·커밋 대상으로 준비했다.
+- 원본과 압축 보관본은 Git에서 받을 수 없는 로컬 파일이다. 기존 문서·요약은 `259b91fc`에 포함됐으며, 이번 리뷰 보완은 로컬 문서 변경이다.
 
 ## 출처
 
