@@ -1,0 +1,55 @@
+{
+  "passed": true,
+  "t0": "2026-10-16T17:38:39.826401904Z",
+  "replacement_ready": "2026-10-16T17:39:42.440871319Z",
+  "recovery_boundary_utc": "2026-10-16T17:40:12.440871+00:00",
+  "replacement_seconds": 62.6144700050354,
+  "poll_sleep_seconds": 2,
+  "percentile_method": "nearest_rank",
+  "latency_scope": "all_requests",
+  "baseline_valid": true,
+  "phases": {
+    "baseline": {
+      "requests": 611,
+      "failed": 0,
+      "http_5xx": 0,
+      "connection_failures": 0,
+      "dropped_iterations": 0,
+      "error_rate": 0.0,
+      "throughput": 5.007849825708745,
+      "p95_ms": 5.811261,
+      "p99_ms": 9.686021,
+      "duration_samples": 611,
+      "small_p99_sample": false,
+      "samples_complete": true
+    },
+    "failure": {
+      "requests": 463,
+      "failed": 0,
+      "http_5xx": 0,
+      "connection_failures": 0,
+      "dropped_iterations": 0,
+      "error_rate": 0.0,
+      "throughput": 4.999218804305925,
+      "p95_ms": 16.143984,
+      "p99_ms": 46.739759,
+      "duration_samples": 463,
+      "small_p99_sample": false,
+      "samples_complete": true
+    },
+    "recovery": {
+      "requests": 1026,
+      "failed": 0,
+      "http_5xx": 0,
+      "connection_failures": 0,
+      "dropped_iterations": 0,
+      "error_rate": 0.0,
+      "throughput": 4.995962595341418,
+      "p95_ms": 10.721773,
+      "p99_ms": 32.0949,
+      "duration_samples": 1026,
+      "small_p99_sample": false,
+      "samples_complete": true
+    }
+  }
+}
