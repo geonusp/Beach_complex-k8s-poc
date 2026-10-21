@@ -1,6 +1,7 @@
 import copy
 import datetime as dt
 import json
+import os
 import pathlib
 import subprocess
 import sys
@@ -8,6 +9,17 @@ import tempfile
 import unittest
 
 import failure_results as f
+
+
+def shell_env(work, **extra):
+    # Shell fixtures must use the interpreter running unittest, not a PATH alias.
+    shim = work / "python3"
+    shim.write_text('#!/usr/bin/env bash\nexec "$FIXTURE_PYTHON" "$@"\n', newline="\n")
+    shim.chmod(0o755)
+    env = dict(os.environ, FIXTURE_PYTHON=sys.executable.replace("\\", "/"),
+               PYTHON=sys.executable.replace("\\", "/"), **extra)
+    env["PATH"] = work.as_posix() + os.pathsep + env["PATH"]
+    return env
 
 
 def resource(kind, name, **extra):

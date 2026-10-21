@@ -140,13 +140,13 @@ case "$1 $2" in
 esac
 ''')
                 (work / "aws").chmod(0o755)
-                env = dict(os.environ, FIXTURE_ROOT=work.as_posix(), SCENARIO=scenario, PYTHON="python3",
-                           BEACH_NODE_RESULT_DIR=(work / "results").as_posix())
-                env["PATH"] = work.as_posix() + os.pathsep + env["PATH"]
+                env = fixtures.shell_env(work, FIXTURE_ROOT=work.as_posix(), SCENARIO=scenario,
+                                         BEACH_NODE_RESULT_DIR=(work / "results").as_posix())
                 bash = "C:/Program Files/Git/bin/bash.exe" if os.name == "nt" else shutil.which("bash")
                 command = 'export PATH="$(cygpath -u "$FIXTURE_ROOT")":$PATH; bash "$FIXTURE_ROOT/scripts/run-node-failure-experiment.sh" --confirm-dev app-1 fixture' if os.name == "nt" else 'bash "$FIXTURE_ROOT/scripts/run-node-failure-experiment.sh" --confirm-dev app-1 fixture'
                 result = subprocess.run([bash, "-c", command], env=env, text=True, capture_output=True, timeout=20)
                 self.assertNotEqual(result.returncode, 0, result.stdout + result.stderr)
+                self.assertTrue((work / "aws.log").exists(), result.stdout + result.stderr)
                 calls = (work / "aws.log").read_text()
                 mutations = [line for line in calls.splitlines() if "--dry-run" not in line]
                 if scenario == "permission": self.assertFalse(any("stop-instances" in c for c in mutations))
@@ -195,8 +195,7 @@ esac
 ''', "curl": '#!/usr/bin/env bash\necho "[]"\n', "sleep": '#!/usr/bin/env bash\nexit 0\n'}
                 for name, content in tools.items():
                     (work / name).write_text(content); (work / name).chmod(0o755)
-                env = dict(os.environ, FIXTURE_ROOT=work.as_posix(), SCENARIO=scenario)
-                env['PATH'] = work.as_posix() + os.pathsep + env['PATH']
+                env = fixtures.shell_env(work, FIXTURE_ROOT=work.as_posix(), SCENARIO=scenario)
                 bash = 'C:/Program Files/Git/bin/bash.exe' if os.name == 'nt' else shutil.which('bash')
                 prefix = 'export PATH="$(cygpath -u "$FIXTURE_ROOT")":$PATH; ' if os.name == 'nt' else ''
                 run = subprocess.run([bash, '-c', prefix + 'set -Eeuo pipefail; work_dir="$FIXTURE_ROOT";\n' + common + '\neval "$remote_common"\n' + remote], env=env, text=True, capture_output=True, timeout=20)
