@@ -44,7 +44,7 @@ ssm_run() {
   local instance_id="$1"
   local script="$2"
   local output_bucket="${3:-}" output_prefix="${4:-}"
-  local encoded command_id status deadline output_url output_uri
+  local encoded command_id status deadline output_url output_uri parameters_file parameters_path
   local -a output_args=()
 
   # Windows Git Bash can preserve carriage returns or terminal control bytes
@@ -59,15 +59,23 @@ ssm_run() {
   fi
 
   encoded="$(printf '%s' "$script" | base64 -w0)"
+  parameters_file="$(mktemp)" || fail 'failed to create SSM parameters file'
+  printf '{"commands":["echo %s | base64 -d | bash"]}' "$encoded" > "$parameters_file"
+  parameters_path="$parameters_file"
+  if command -v cygpath >/dev/null; then parameters_path="$(cygpath -m "$parameters_file")"; fi
 
-  command_id="$(aws ssm send-command \
+  if ! command_id="$(aws ssm send-command \
     --instance-ids "$instance_id" \
     --document-name AWS-RunShellScript \
     --comment "beach-k8s bootstrap" \
-    --parameters "commands=echo $encoded | base64 -d | bash" \
+    --parameters "file://$parameters_path" \
     "${output_args[@]}" \
     --query 'Command.CommandId' \
-    --output text)" || fail "failed to send SSM command to $instance_id"
+    --output text)"; then
+    rm -f "$parameters_file"
+    fail "failed to send SSM command to $instance_id"
+  fi
+  rm -f "$parameters_file"
 
   deadline=$((SECONDS + ssm_command_timeout_seconds))
   while true; do
