@@ -65,7 +65,7 @@ case "$1 $2" in
   'ssm send-command')
     while (($#)); do
       if [[ "$1" == '--parameters' ]]; then
-        printf '%s' "$2" > "$AWS_PARAMETERS_FILE"
+        sed -e 's/^{"commands":\["/commands=/' -e 's/"]}$//' "${2#file://}" > "$AWS_PARAMETERS_FILE"
       fi
       if [[ "$1" == '--output-s3-bucket-name' ]]; then printf '%s' "$2" > "$AWS_BUCKET_FILE"; fi
       if [[ "$1" == '--output-s3-key-prefix' ]]; then printf '%s' "$2" > "$AWS_PREFIX_FILE"; fi
@@ -159,7 +159,7 @@ set -Eeuo pipefail
 case "$1 $2" in
   'ssm send-command')
     while (($#)); do
-      [[ "$1" == '--parameters' ]] && printf '%s' "$2" > "$AWS_PARAMETERS_FILE"
+      [[ "$1" == '--parameters' ]] && sed -e 's/^{"commands":\["/commands=/' -e 's/"]}$//' "${2#file://}" > "$AWS_PARAMETERS_FILE"
       [[ "$1" == '--output-s3-key-prefix' ]] && printf '%s' "$2" > "$AWS_PREFIX_FILE"
       shift
     done
