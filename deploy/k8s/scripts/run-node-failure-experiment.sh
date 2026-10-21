@@ -128,7 +128,8 @@ while ((SECONDS < deadline)); do
   snapshot
   if [[ -f "$work_dir/inject" ]] && python3 "$work_dir/node_failure_results.py" observe "$work_dir"; then
     db > "$work_dir/db-recovered.txt"
-    cmp "$work_dir/db-before.txt" "$work_dir/db-recovered.txt"; restored=true
+    cmp "$work_dir/db-before.txt" "$work_dir/db-recovered.txt" || { echo 'ERROR: database contents changed after relocation' >&2; exit 1; }
+    restored=true
   elif [[ "$restored" == true ]]; then echo 'ERROR: recovery regressed'; exit 1; fi
   if [[ "$(kubectl -n beach get job "$job" -o jsonpath='{.status.succeeded}')" == 1 ]]; then
     [[ "$restored" == true ]] || exit 1

@@ -203,6 +203,10 @@ esac
                 self.assertIn('remote_status=' + ('0' if scenario == 'healthy' else '1'), run.stdout, run.stdout[-1500:] + run.stderr)
                 self.assertIn('"metric": "http_reqs"', run.stdout)
                 self.assertIn('delete job', (work / 'kubectl.log').read_text())
+                if scenario == 'data_loss':
+                    self.assertIn('ERROR: database contents changed after relocation', run.stdout, run.stdout[-1500:] + run.stderr)
+                else:
+                    self.assertNotIn('ERROR: database contents changed after relocation', run.stdout)
                 if scenario == 'healthy':
                     self.assertIn('replacement_ready=', run.stdout)
                     data = recovered(cluster()); data['items'][3]['status']['conditions'][0]['status'] = 'True'
