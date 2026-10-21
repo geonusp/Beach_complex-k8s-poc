@@ -105,8 +105,7 @@ elif 'version ' in args: print('gitVersion: fixture')
                     path = work / name
                     path.write_text(content)
                     path.chmod(0o755)
-                env = dict(os.environ, work_dir=work.as_posix(), SCENARIO=scenario)
-                env["PATH"] = work.as_posix() + os.pathsep + env["PATH"]
+                env = fixtures.shell_env(work, work_dir=work.as_posix(), SCENARIO=scenario)
                 bash = shutil.which("bash")
                 if os.name == "nt":
                     bash = "C:/Program Files/Git/bin/bash.exe"
