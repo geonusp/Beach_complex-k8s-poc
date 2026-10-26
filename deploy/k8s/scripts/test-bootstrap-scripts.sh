@@ -54,7 +54,7 @@ case "$1 $2" in
   'ssm send-command')
     while (($#)); do
       if [[ "$1" == '--parameters' ]]; then
-        printf '%s' "$2" > "$AWS_PARAMETERS_FILE"
+        sed -e 's/^{"commands":\["/commands=/' -e 's/"]}$//' "${2#file://}" > "$AWS_PARAMETERS_FILE"
         break
       fi
       shift
