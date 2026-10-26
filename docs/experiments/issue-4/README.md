@@ -24,9 +24,9 @@
 
 위 기록은 보존된 로컬 파일을 확인한 결과다. 이번 문서 정리에서 클러스터 재실행이나 복구 검증은 하지 않았다. 실패 원본을 보존하며, 다른 위치에서 수행한 후속 실행 결과가 있는지는 이 문서로 단정하지 않는다.
 
-구현·실행 안내: C:/Users/pro/Documents/GitHub/BeachWorkspace/Beach_complex-k8s-poc/tempdocs/issue-4/HPA_IMPLEMENTATION.md
+실험 실행기: [run-hpa-experiment.sh](../../../deploy/k8s/scripts/run-hpa-experiment.sh)
 
-관련 PR: https://github.com/geonusp/Beach_complex-k8s-poc/pull/33
+관련 PR: [실험 도구 구현 #33](https://github.com/geonusp/Beach_complex-k8s-poc/pull/33), [실측·검증 #34](https://github.com/geonusp/Beach_complex-k8s-poc/pull/34)
 
 ## 2026-10-26 사용자 smoke 실행
 
@@ -68,7 +68,7 @@
 
 사용자 실행 당시 작업 기록은 `feat/4-hpa-measurement`의 기준 HEAD `27e52517` 위 3파일 미커밋 수정 상태다. 실행 원본에 별도 커밋·diff snapshot은 없으므로 깨끗한 기준 커밋의 결과로 취급하지 않는다.
 
-다음 단계는 baseline 5분 측정 → 실제 CPU·memory를 근거로 requests 검토 → 필요 시 변경·배포 후 baseline 재측정이다. 그 검토가 끝난 뒤 load/stress와 같은 조건 반복 비교를 진행한다. 이번 smoke 성공만으로 이슈 #4 완료를 선언하지 않는다.
+이 smoke 완료 당시에는 baseline·requests 조정·HPA 확장·축소가 미검증이었다. 이후 baseline 측정, requests 적용 후 재측정, load/stress와 대표 load 반복을 수행했으며 결과는 아래 회차별 기록을 따른다. smoke 자체는 HPA 확장·축소 증거가 아니다.
 
 ## 2026-10-26 최초 baseline 및 requests 검토
 
@@ -90,19 +90,19 @@ Metrics Server는 Pod별 32개 표본, Prometheus는 Pod별 11개 표본이다. 
 
 `deploy/k8s/app/deployment.yaml`의 CPU requests를 250m → 100m으로 변경했다. 이는 이번 5 req/s baseline의 관측 최대 40.81m에 약 2.45배 여유를 둔 실험용 시작값이다. memory requests는 관측 최대 440.57Mi에 약 71Mi 여유가 있는 512Mi를 유지한다. limits는 변경하지 않는다. 저부하·이미 실행 중인 JVM의 5분 관측이며 시작 구간이나 고부하 요구량의 확정 근거는 아니다.
 
-HPA CPU 목표 60%는 요청량 250m일 때 평균 Pod CPU 150m, 100m일 때 60m에 해당한다. 이 값은 HPA 계산상의 목표이며 정확히 그 시점에 확장된다는 보장은 아니다. 새 requests로 실제 배포·rollout·endpoint/API를 확인한 뒤 baseline 재측정, 이후 load/stress로 사용량·오류·확장·축소를 검증한다. 현재는 로컬 매니페스트만 변경했으며 실제 클러스터 적용은 미실행이다. 문제가 생기면 CPU requests를 기존 250m으로 되돌리고 rollout·endpoint/API 복구를 확인한다.
+HPA CPU 목표 60%는 요청량 250m일 때 평균 Pod CPU 150m, 100m일 때 60m에 해당한다. 이 값은 HPA 계산상의 목표이며 정확히 그 시점에 확장된다는 보장은 아니다. 이 변경안 작성 당시에는 로컬 매니페스트만 수정한 상태였고, 이후 실제 배포·rollout·endpoint/API 확인과 baseline 재측정을 수행했다. 해당 결과는 아래 CPU100m baseline 기록을 따른다. 문제가 생기면 CPU requests를 기존 250m으로 되돌리고 rollout·endpoint/API 복구를 확인한다.
 
 공식 관계: https://kubernetes.io/docs/tasks/run-application/horizontal-pod-autoscale/
 
-Reviewer의 읽기 전용 검토에서 requests 변경안의 blocking finding은 없었다. baseline 중 HPA 확장 가능성을 언급한 비차단 의견은 실행 조건과 대조해 정정했다. 기존 HPA는 사전 검사에서 거부하며 HPA 생성은 load/stress에 한정되므로 정상 baseline은 HPA 없이 2 replicas 고정이다. 낮아진 requests에 따른 HPA 민감도와 새 Pod JVM 시작 CPU는 load/stress에서 구분해 관측한다. Reviewer는 원시 표본 재계산·실제 적용·테스트를 수행하지 않았다.
+기존 HPA는 사전 검사에서 거부하며, HPA 생성은 load/stress/extreme에 한정된다. 정상 baseline은 HPA 없이 2 replicas 고정이다.
 
 ## requests 적용 후 baseline 사전 검사 중단 및 처리 변경
 
 사용자 출력에서 CPU requests 적용과 rollout 완료를 확인했다. 후속 회차 `hpa-20261026T194824Z-4588`은 실제 k6 시작 전 `verify-observability.sh`의 `http_5xx_ratio returned NaN`으로 중단됐다. SSM `0b57fd90-ce1a-4ff8-bc7a-a519fd1559d9` stdout은 전체 요청률 0·오류율 NaN이다. 이 회차를 5xx 발생이나 baseline 성공으로 해석하지 않는다.
 
-사용자 요청에 따라, 사전 검사의 전체 요청률이 0인 경우에만 HTTP 오류율·p95의 NaN을 측정 불가 WARNING으로 기록하고 진행한다. 원본 NaN은 보존하며 0으로 변환하지 않는다. 요청률이 양수인 경우의 NaN 및 다른 필수 지표 이상·빈 결과·down target은 실패한다. 사전 검사 통과는 오류율0이나 p95 측정 성공의 증거가 아니다. 실제 baseline은 k6 원본·summary로 판정한다.
+사전 검사의 전체 요청률이 0인 경우에만 HTTP 오류율·p95의 NaN을 측정 불가 WARNING으로 기록하고 진행한다. 원본 NaN은 보존하며 0으로 변환하지 않는다. 요청률이 양수인 경우의 NaN 및 다른 필수 지표 이상·빈 결과·down target은 실패한다. 사전 검사 통과는 오류율0이나 p95 측정 성공의 증거가 아니다. 실제 baseline은 k6 원본·summary로 판정한다.
 
-관련 로컬 관측성 테스트 6개와 변경 셸 문법 검사가 통과했고 Reviewer blocking finding은 없었다. bootstrap 전체는 수정 전 HEAD에서도 재현되는 Windows Python 의존성 검사 fixture 실패로 미통과다. 수정 후 실제 baseline은 아직 재실행하지 않았다.
+관련 로컬 관측성 테스트 6개와 변경 셸 문법 검사가 통과했다. bootstrap 전체는 수정 전 HEAD에서도 재현되는 Windows Python 의존성 검사 fixture 실패로 미통과다. 이 수정 당시에는 baseline 재실행 전이었으며, 이후 결과는 다음 절에 기록했다.
 
 ## CPU 100m 적용 후 baseline 성공
 
@@ -115,7 +115,7 @@ Reviewer의 읽기 전용 검토에서 requests 변경안의 blocking finding은
 - k6 CPU 표본 최대 0.016940376200728826 cores, throttled period ratio 최대 0.006289308176100629. 각 10개 표본이다.
 - 사전 관측성 확인 출력에 NaN·WARNING은 없었다. 따라서 이번 성공은 새 NaN 허용 분기가 실제로 실행됐다는 증거는 아니다.
 
-최초 CPU250m baseline의 p95 4.224806ms·p99 11.221794ms보다 이번 수치는 높다. Pod 교체·JVM 상태·시점 등이 달라 requests 변경만을 원인으로 단정하지 않는다. 현재 CPU100m을 다음 load/stress를 위한 실험값으로 유지하고, 반복 비교와 부하 중 자원·오류·replica 관측으로 평가한다. baseline은 HPA 없이 실행하므로 확장·축소 검증은 아직이다. 다음은 load 기본40 req/s·600초이며, 이후 HPA 축소와 최종 복구를 별도로 기다린다.
+최초 CPU250m baseline의 p95 4.224806ms·p99 11.221794ms보다 이번 수치는 높다. Pod 교체·JVM 상태·시점 등이 달라 requests 변경만을 원인으로 단정하지 않는다. 이후 load/stress와 반복 실험은 CPU100m을 유지해 수행했다. baseline 자체는 HPA 없이 실행하므로 확장·축소 증거가 아니며, 해당 검증 결과는 아래 부하별 기록을 따른다.
 
 ## load 40 req/s 실행 결과
 
@@ -132,7 +132,7 @@ Reviewer의 읽기 전용 검토에서 requests 변경안의 blocking finding은
 | 최초 Ready 확장 관측 전 | 3705 | 0 | 40.006981 | 3.708512 | 9.254689 | 28.991471 |
 | 최초 Ready 확장 관측 후 | 20296 | 0 | 39.999425 | 2.835375 | 6.870626 | 17.445707 |
 
-지연시간은 전체 요청의 nearest-rank 방식이며 구간 경계는 10초 주기 replica 관측을 사용한다. 확장 후 지연시간 감소가 관측됐지만 JVM·시간 경과 등의 영향과 분리한 인과 검증은 아니다. constant-arrival-rate 40 req/s를 지정했고 확장 전부터 그 부하를 처리했으므로 처리량이 약40으로 유지된 것을 병목이나 확장 효과 부재로 단정하지 않는다. 이번 회차만으로 최대 수용량 증가를 입증하지 않는다. 다음은 stress 기본80 req/s·600초이며, 같은 조건 반복 및 편차 비교는 아직 남아 있다.
+지연시간은 전체 요청의 nearest-rank 방식이며 구간 경계는 10초 주기 replica 관측을 사용한다. 확장 후 지연시간 감소가 관측됐지만 JVM·시간 경과 등의 영향과 분리한 인과 검증은 아니다. constant-arrival-rate 40 req/s를 지정했고 확장 전부터 그 부하를 처리했으므로 처리량이 약40으로 유지된 것을 병목이나 확장 효과 부재로 단정하지 않는다. 이번 회차만으로 최대 수용량 증가를 입증하지 않는다. 이후 수행한 stress와 대표 load 반복 결과는 아래에 기록했다.
 
 ## stress 80 req/s 실행 결과 및 1차 비교
 
@@ -158,7 +158,7 @@ Reviewer의 읽기 전용 검토에서 requests 변경안의 blocking finding은
 | load 40 req/s | 24001 | 0 | 2.923282 | 7.222153 | 18.761568 | 2→4→2 |
 | stress 80 req/s | 48001 | 0 | 2.447789 | 5.942933 | 16.435394 | 2→3→4→3→2 |
 
-여기까지 CPU100m의 baseline/load/stress 1차 실측이다. 부하별 시간·JVM 상태가 다르고 동일 조건 반복 편차는 아직 확보하지 않았으므로 #4 전체 완료로 처리하지 않는다. 기존 계획대로 CPU100m·memory512Mi·동일 이미지/요청률/기간을 유지해 baseline→load→stress를 한 차례 더 실행한 뒤 CPU credit·Pod 배치·부하 생성기 지표와 함께 비교한다. 실제 실행은 사용자가 직접 수행한다.
+위 표는 CPU100m의 baseline/load/stress 1차 실측이다. 해당 시점에는 동일 조건 반복 편차가 미확보였으며, 이후 대표 load를 반복해 비교했다. 부하별 시간·JVM 상태 차이와 반복 범위는 아래에 구분해 기록한다.
 
 ### 반복 범위 정정
 
@@ -176,7 +176,7 @@ Reviewer의 읽기 전용 검토에서 requests 변경안의 blocking finding은
 
 두 회차의 초기 Beach Pod 이름·노드 배치·이미지 digest·requests(100m/512Mi)는 일치한다. 요청 설정은40 req/s·600초다. HPA CPU utilization 관측 범위는 첫 load 3~242%(88표본), 반복9~64%(59표본)로 달랐다. 목표60%와 기본 tolerance 10%라면 반복 최대64%는 확장하지 않는 범위에 부합한다. 실제 controller tolerance 및 CPU 차이의 원인은 미확인이다. JVM 상태·CPU credit·자원 간섭을 분리한 인과 검증은 아니다.
 
-대표 load 반복·편차 자료는 확보했으나 확장·축소의 반복 재현은 확인되지 않았다. 이번 회차를 HPA 성공으로 바꾸거나 #4 전체 완료로 처리하지 않는다. 추가 실험은 이 차이를 검토한 뒤 결정한다.
+대표 load 반복·편차 자료는 확보했으나 40 req/s에서 확장·축소의 반복 재현은 확인되지 않았다. 이 회차의 HPA 미통과 판정은 유지한다. 이후 별도 extreme 회차에서 확장·축소를 확인했으며, 이를 동일40 req/s 조건의 재현성 증거로 사용하지 않는다.
 
 근거: 위 회차의 `summary.json`, `remote-output.txt`; `deploy/k8s/scripts/hpa_results.py`, `lib/hpa-remote.sh`; [Kubernetes HPA 공식 문서](https://kubernetes.io/docs/concepts/workloads/autoscaling/horizontal-pod-autoscale/).
 
@@ -188,7 +188,7 @@ Reviewer의 읽기 전용 검토에서 requests 변경안의 blocking finding은
 bash deploy/k8s/scripts/run-hpa-experiment.sh --confirm-dev extreme
 ```
 
-120 req/s는 앞선 stress80의1.5배인 실험 시작값이며 확장을 보장하지 않는다. 오류율5% 미만·p95 2초 미만 기준의30초 이후 평가 중단과 dropped iterations0 조건을 재사용한다. 결과는 실행별 고유 UTC 라벨 폴더에 보존한다. 실패 시 후속 부하를 시작하지 않고 `remote-output.txt`의 복구 요청과 `final_state_verified`를 구분해 확인한다. 최종 복구 표식이 없으면 임시 Job/HPA/ConfigMap과2 replicas·endpoint·API를 확인하는 기존 수동 복구 안내를 따른다. 현재 extreme 실제 실험은 미실행이다.
+120 req/s는 앞선 stress80의1.5배인 실험 시작값이며 확장을 보장하지 않는다. 오류율5% 미만·p95 2초 미만 기준의30초 이후 평가 중단과 dropped iterations0 조건을 재사용한다. 결과는 실행별 고유 UTC 라벨 폴더에 보존한다. 실패 시 후속 부하를 시작하지 않고 `remote-output.txt`의 복구 요청과 `final_state_verified`를 구분해 확인한다. 최종 복구 표식이 없으면 임시 Job/HPA/ConfigMap과2 replicas·endpoint·API를 확인하는 기존 수동 복구 안내를 따른다. 프로필 추가 당시에는 실험 전이었으며, 이후 실측 결과는 다음 절에 기록했다.
 
 ## extreme 120 req/s 실측 통과
 
