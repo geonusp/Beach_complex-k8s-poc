@@ -65,7 +65,7 @@ PY
 python3 "$work_dir/hpa_results.py" preflight "$work_dir/preflight.json" "$work_dir/context.json"
 kubectl --request-timeout=10s get --raw /apis/metrics.k8s.io/v1beta1/namespaces/beach/pods > "$work_dir/metrics-before.json"
 cat "$work_dir/metrics-before.json"; echo
-if [[ "$profile" == load || "$profile" == stress ]]; then
+if [[ "$profile" == load || "$profile" == stress || "$profile" == extreme ]]; then
   sed "s/name: beach-experiment/name: $job_name/" "$work_dir/hpa.yaml" > "$work_dir/run-hpa.yaml"
   hpa_created=true; hpa_changed=true
   "${k[@]}" create -f "$work_dir/run-hpa.yaml"

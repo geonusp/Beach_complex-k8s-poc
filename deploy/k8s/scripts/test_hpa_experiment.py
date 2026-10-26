@@ -170,11 +170,13 @@ ssm_run() { if [[ "${TEST_SEND_FAIL:-0}" == 1 ]]; then echo SEND_FAILED >&2; exi
                                      TEST_RUNNER=(work / "run-hpa-experiment.sh").as_posix(), work_dir=work.as_posix(), BEACH_HPA_RESULT_DIR=(work / "results").as_posix())
             bash = "C:/Program Files/Git/bin/bash.exe" if os.name == "nt" else shutil.which("bash")
             prefix = 'export PATH="$(cygpath -u "$work_dir")":/usr/bin:/bin:$PATH; ' if os.name == "nt" else 'export PATH="$work_dir":$PATH; '
-            command = [bash, "-c", prefix + 'bash "$TEST_RUNNER" --confirm-dev load 40 fixture']
+            command = [bash, "-c", prefix + 'bash "$TEST_RUNNER" --confirm-dev extreme "" fixture']
             run = subprocess.run(command, env=env, capture_output=True, text=True, timeout=20)
             self.assertNotEqual(run.returncode, 0)
             evidence = work / "results/fixture/remote-output.txt"
+            self.assertTrue(evidence.exists(), run.stdout + run.stderr)
             self.assertIn("CONTROLLED_REMOTE_FAILURE", evidence.read_text(), run.stdout + run.stderr)
+            self.assertIn("profile='extreme'; rate='120'", (work / "payload.sh").read_text())
             previous = evidence.read_bytes()
             again = subprocess.run(command, env=env, capture_output=True, text=True, timeout=20)
             self.assertNotEqual(again.returncode, 0)
@@ -188,7 +190,7 @@ ssm_run() { if [[ "${TEST_SEND_FAIL:-0}" == 1 ]]; then echo SEND_FAILED >&2; exi
 
     def test_real_remote_shell_preserves_load_failure_and_distinguishes_restore_failure(self):
         root = pathlib.Path(__file__).parent
-        for scenario in ("healthy", "seconds_filtered", "throttling_missing", "k6_failed", "restore_failed", "api_failed", "preflight_failed", "job_create_failed", "hpa_create_timeout", "terminating"):
+        for scenario in ("healthy", "extreme", "seconds_filtered", "throttling_missing", "k6_failed", "restore_failed", "api_failed", "preflight_failed", "job_create_failed", "hpa_create_timeout", "terminating"):
             with self.subTest(scenario=scenario), tempfile.TemporaryDirectory() as folder:
                 work = pathlib.Path(folder) / "run.fixture"; work.mkdir()
                 for name in ("hpa_results.py", "failure_results.py", "node_failure_results.py"):
@@ -230,7 +232,7 @@ elif 'scale deployment' in a: (p/'scaled').touch()
                 (work / "curl").write_text('#!/usr/bin/env bash\n[[ "$SCENARIO" != api_failed ]] || exit 1\necho API_OK\n', newline="\n")
                 (work / "sleep").write_text('#!/usr/bin/env bash\nexit 0\n', newline="\n")
                 for name in ("kubectl", "curl", "sleep"): (work / name).chmod(0o755)
-                env = fixtures.shell_env(work, work_dir=work.as_posix(), SCENARIO=scenario, profile="load", rate="40", TEST_REMOTE=(root / "lib/hpa-remote.sh").resolve().as_posix())
+                env = fixtures.shell_env(work, work_dir=work.as_posix(), SCENARIO=scenario, profile="extreme" if scenario == "extreme" else "load", rate="120" if scenario == "extreme" else "40", TEST_REMOTE=(root / "lib/hpa-remote.sh").resolve().as_posix())
                 # Keep the lock inside this fixture; the production lock path is otherwise unchanged.
                 remote = (root / "lib/hpa-remote.sh").read_text().replace('/tmp/beach-hpa-active', work.as_posix() + '/lock')
                 remote = remote.replace('deadline=$((SECONDS + 180))', 'deadline=$((SECONDS + 5))')
@@ -239,8 +241,11 @@ elif 'scale deployment' in a: (p/'scaled').touch()
                 bash = "C:/Program Files/Git/bin/bash.exe" if os.name == "nt" else shutil.which("bash")
                 prefix = 'export PATH="$(cygpath -u "$work_dir")":$PATH; ' if os.name == "nt" else 'export PATH="$work_dir":$PATH; '
                 run = subprocess.run([bash, "-c", prefix + 'source "$TEST_REMOTE"'], env=env, capture_output=True, text=True, timeout=30)
-                self.assertEqual(run.returncode == 0, scenario in ("healthy", "seconds_filtered", "terminating"), run.stdout + run.stderr)
+                self.assertEqual(run.returncode == 0, scenario in ("healthy", "extreme", "seconds_filtered", "terminating"), run.stdout + run.stderr)
                 calls = (work / "calls").read_text()
+                if scenario == "extreme":
+                    self.assertIn('create -f ' + work.as_posix() + '/run-hpa.yaml', calls)
+                    self.assertIn('HPA_PROFILE=extreme K6_RATE=120', calls)
                 if scenario == "healthy":
                     self.assertIn('K6_NEW_MACHINE_READABLE_SUMMARY=false', calls)
                     self.assertIn('"name": "k6_cpu_cores"', run.stdout)
