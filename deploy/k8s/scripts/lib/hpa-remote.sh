@@ -65,7 +65,7 @@ PY
 python3 "$work_dir/hpa_results.py" preflight "$work_dir/preflight.json" "$work_dir/context.json"
 kubectl --request-timeout=10s get --raw /apis/metrics.k8s.io/v1beta1/namespaces/beach/pods > "$work_dir/metrics-before.json"
 cat "$work_dir/metrics-before.json"; echo
-if [[ "$profile" == load || "$profile" == stress ]]; then
+if [[ "$profile" == load || "$profile" == stress || "$profile" == extreme ]]; then
   sed "s/name: beach-experiment/name: $job_name/" "$work_dir/hpa.yaml" > "$work_dir/run-hpa.yaml"
   hpa_created=true; hpa_changed=true
   "${k[@]}" create -f "$work_dir/run-hpa.yaml"
@@ -101,7 +101,8 @@ fi
 prometheus_api=/api/v1/namespaces/monitoring/services/http:kube-prometheus-stack-prometheus:9090/proxy/api/v1
 end="$(date -u +%s)"
 printf '%s\t%s\n' k6_cpu_cores 'sum by (pod) (rate(container_cpu_usage_seconds_total{namespace="beach",pod=~"beach-k6-.*",container="k6"}[1m]))' >> "$work_dir/promql-queries.tsv"
-printf '%s\t%s\n' k6_throttled_seconds 'sum by (pod) (rate(container_cpu_cfs_throttled_seconds_total{namespace="beach",pod=~"beach-k6-.*",container="k6"}[1m]))' >> "$work_dir/promql-queries.tsv"
+# The chart drops throttled seconds; retain evidence as the fraction of throttled CFS periods.
+printf '%s\t%s\n' k6_throttled_period_ratio 'sum by (pod) (rate(container_cpu_cfs_throttled_periods_total{namespace="beach",pod=~"beach-k6-.*",container="k6"}[1m])) / sum by (pod) (rate(container_cpu_cfs_periods_total{namespace="beach",pod=~"beach-k6-.*",container="k6"}[1m]))' >> "$work_dir/promql-queries.tsv"
 while IFS=$'\t' read -r -u 3 name query; do
   encoded="$(python3 -c 'import sys,urllib.parse; print(urllib.parse.quote(sys.argv[1], safe=""))' "$query")"
   kubectl --request-timeout=30s get --raw "$prometheus_api/query_range?query=$encoded&start=$start&end=$end&step=30" > "$work_dir/prom-$name.json"

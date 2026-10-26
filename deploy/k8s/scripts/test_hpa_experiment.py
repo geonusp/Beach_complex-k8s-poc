@@ -68,7 +68,7 @@ echo "$2" >> "$SUITE_CALLS"
     def cluster(self):
         data = fixtures.fixture()
         cp = fixtures.resource("Node", "cp-1", status=dict(conditions=[dict(type="Ready", status="True")]))
-        cp["metadata"]["labels"]["node-role"] = "control-plane"
+        cp["metadata"]["labels"]["node-role.kubernetes.io/control-plane"] = ""
         data["items"].append(cp)
         nodes = [x for x in data["items"] if x["kind"] == "Node"]
         for i, node in enumerate(nodes):
@@ -79,6 +79,19 @@ echo "$2" >> "$SUITE_CALLS"
             pod["spec"]["containers"] = [{"name": "beach", "resources": {"requests": {"cpu": "250m", "memory": "512Mi"}}}]
         data["all_pods"] = [x for x in data["items"] if x["kind"] == "Pod"]
         return data
+
+    def test_preflight_checks_actual_control_plane_and_worker_role_labels(self):
+        import hpa_results as h
+        data = self.cluster()
+        h.preflight(data, self.context())
+        for node in (x for x in data["items"] if x["kind"] == "Node"):
+            with self.subTest(node=node["metadata"]["name"]):
+                bad = copy.deepcopy(data)
+                target = next(x for x in bad["items"] if x["kind"] == "Node" and x["metadata"]["name"] == node["metadata"]["name"])
+                target["metadata"]["labels"].pop("node-role.kubernetes.io/control-plane", None)
+                target["metadata"]["labels"]["node-role"] = "wrong"
+                with self.assertRaises(ValueError):
+                    h.preflight(bad, self.context())
 
     def test_preflight_rejects_existing_hpa_wrong_cluster_and_capacity(self):
         import hpa_results as h
@@ -157,11 +170,13 @@ ssm_run() { if [[ "${TEST_SEND_FAIL:-0}" == 1 ]]; then echo SEND_FAILED >&2; exi
                                      TEST_RUNNER=(work / "run-hpa-experiment.sh").as_posix(), work_dir=work.as_posix(), BEACH_HPA_RESULT_DIR=(work / "results").as_posix())
             bash = "C:/Program Files/Git/bin/bash.exe" if os.name == "nt" else shutil.which("bash")
             prefix = 'export PATH="$(cygpath -u "$work_dir")":/usr/bin:/bin:$PATH; ' if os.name == "nt" else 'export PATH="$work_dir":$PATH; '
-            command = [bash, "-c", prefix + 'bash "$TEST_RUNNER" --confirm-dev load 40 fixture']
+            command = [bash, "-c", prefix + 'bash "$TEST_RUNNER" --confirm-dev extreme "" fixture']
             run = subprocess.run(command, env=env, capture_output=True, text=True, timeout=20)
             self.assertNotEqual(run.returncode, 0)
             evidence = work / "results/fixture/remote-output.txt"
+            self.assertTrue(evidence.exists(), run.stdout + run.stderr)
             self.assertIn("CONTROLLED_REMOTE_FAILURE", evidence.read_text(), run.stdout + run.stderr)
+            self.assertIn("profile='extreme'; rate='120'", (work / "payload.sh").read_text())
             previous = evidence.read_bytes()
             again = subprocess.run(command, env=env, capture_output=True, text=True, timeout=20)
             self.assertNotEqual(again.returncode, 0)
@@ -175,7 +190,7 @@ ssm_run() { if [[ "${TEST_SEND_FAIL:-0}" == 1 ]]; then echo SEND_FAILED >&2; exi
 
     def test_real_remote_shell_preserves_load_failure_and_distinguishes_restore_failure(self):
         root = pathlib.Path(__file__).parent
-        for scenario in ("healthy", "k6_failed", "restore_failed", "api_failed", "preflight_failed", "job_create_failed", "hpa_create_timeout", "terminating"):
+        for scenario in ("healthy", "extreme", "seconds_filtered", "throttling_missing", "k6_failed", "restore_failed", "api_failed", "preflight_failed", "job_create_failed", "hpa_create_timeout", "terminating"):
             with self.subTest(scenario=scenario), tempfile.TemporaryDirectory() as folder:
                 work = pathlib.Path(folder) / "run.fixture"; work.mkdir()
                 for name in ("hpa_results.py", "failure_results.py", "node_failure_results.py"):
@@ -197,7 +212,9 @@ if 'get pods,' in a:
  if (p/'hpa-created').exists(): d['items'].append(dict(kind='HorizontalPodAutoscaler',metadata=dict(name='test'),spec=dict(scaleTargetRef=dict(kind='Deployment',name='beach')),status=dict(desiredReplicas=2)))
  print(json.dumps(d))
 elif 'get pods -A' in a: print(json.dumps(dict(items=json.loads((p/'cluster.json').read_text())['all_pods'])))
-elif 'get --raw' in a: print(json.dumps(dict(status='success',data=dict(result=[dict(values=[[0,'1']])]))))
+elif 'get --raw' in a:
+ missing=scenario=='seconds_filtered' and 'container_cpu_cfs_throttled_seconds_total' in a or scenario=='throttling_missing' and 'container_cpu_cfs_' in a
+ print(json.dumps(dict(status='success',data=dict(result=[] if missing else [dict(values=[[0,'0']])]))))
 elif 'set env' in a: print('{}')
 elif 'create -f' in a:
  if 'run-hpa.yaml' in a:
@@ -215,7 +232,7 @@ elif 'scale deployment' in a: (p/'scaled').touch()
                 (work / "curl").write_text('#!/usr/bin/env bash\n[[ "$SCENARIO" != api_failed ]] || exit 1\necho API_OK\n', newline="\n")
                 (work / "sleep").write_text('#!/usr/bin/env bash\nexit 0\n', newline="\n")
                 for name in ("kubectl", "curl", "sleep"): (work / name).chmod(0o755)
-                env = fixtures.shell_env(work, work_dir=work.as_posix(), SCENARIO=scenario, profile="load", rate="40", TEST_REMOTE=(root / "lib/hpa-remote.sh").resolve().as_posix())
+                env = fixtures.shell_env(work, work_dir=work.as_posix(), SCENARIO=scenario, profile="extreme" if scenario == "extreme" else "load", rate="120" if scenario == "extreme" else "40", TEST_REMOTE=(root / "lib/hpa-remote.sh").resolve().as_posix())
                 # Keep the lock inside this fixture; the production lock path is otherwise unchanged.
                 remote = (root / "lib/hpa-remote.sh").read_text().replace('/tmp/beach-hpa-active', work.as_posix() + '/lock')
                 remote = remote.replace('deadline=$((SECONDS + 180))', 'deadline=$((SECONDS + 5))')
@@ -224,12 +241,19 @@ elif 'scale deployment' in a: (p/'scaled').touch()
                 bash = "C:/Program Files/Git/bin/bash.exe" if os.name == "nt" else shutil.which("bash")
                 prefix = 'export PATH="$(cygpath -u "$work_dir")":$PATH; ' if os.name == "nt" else 'export PATH="$work_dir":$PATH; '
                 run = subprocess.run([bash, "-c", prefix + 'source "$TEST_REMOTE"'], env=env, capture_output=True, text=True, timeout=30)
-                self.assertEqual(run.returncode == 0, scenario in ("healthy", "terminating"), run.stdout + run.stderr)
+                self.assertEqual(run.returncode == 0, scenario in ("healthy", "extreme", "seconds_filtered", "terminating"), run.stdout + run.stderr)
                 calls = (work / "calls").read_text()
+                if scenario == "extreme":
+                    self.assertIn('create -f ' + work.as_posix() + '/run-hpa.yaml', calls)
+                    self.assertIn('HPA_PROFILE=extreme K6_RATE=120', calls)
                 if scenario == "healthy":
                     self.assertIn('K6_NEW_MACHINE_READABLE_SUMMARY=false', calls)
                     self.assertIn('"name": "k6_cpu_cores"', run.stdout)
-                    self.assertIn('"name": "k6_throttled_seconds"', run.stdout)
+                    self.assertIn('"name": "k6_throttled_period_ratio"', run.stdout)
+                    self.assertIn('container_cpu_cfs_throttled_periods_total', calls)
+                    self.assertIn('container_cpu_cfs_periods_total', calls)
+                if scenario == "throttling_missing":
+                    self.assertIn('Missing Prometheus evidence', run.stderr)
                 if scenario == "preflight_failed":
                     self.assertNotIn('create -f', calls)
                     self.assertNotIn('scale deployment', calls)

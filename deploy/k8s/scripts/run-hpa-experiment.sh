@@ -4,9 +4,9 @@ set -Eeuo pipefail
 export SSM_COMMAND_TIMEOUT_SECONDS=2400
 script_dir="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 source "$script_dir/lib/ssm.sh"
-[[ $# -ge 2 && $# -le 4 && "$1" == --confirm-dev ]] || fail 'Usage: run-hpa-experiment.sh --confirm-dev <smoke|baseline|load|stress> [rate] [label]'
+[[ $# -ge 2 && $# -le 4 && "$1" == --confirm-dev ]] || fail 'Usage: run-hpa-experiment.sh --confirm-dev <smoke|baseline|load|stress|extreme> [rate] [label]'
 profile="$2"
-case "$profile" in smoke|baseline) default_rate=5;; load) default_rate=40;; stress) default_rate=80;; *) fail 'unknown profile';; esac
+case "$profile" in smoke|baseline) default_rate=5;; load) default_rate=40;; stress) default_rate=80;; extreme) default_rate=120;; *) fail 'unknown profile';; esac
 rate="${3:-$default_rate}"; label="${4:-hpa-$(date -u +%Y%m%dT%H%M%SZ)-$$}"
 [[ "$rate" =~ ^[1-9][0-9]{0,2}$ && "$rate" -le 200 ]] || fail 'rate must be in 1..200'
 [[ "$label" =~ ^[a-zA-Z0-9][a-zA-Z0-9_.-]*$ ]] || fail 'invalid result label'

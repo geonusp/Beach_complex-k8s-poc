@@ -4,8 +4,8 @@ import { check } from 'k6';
 const profile = __ENV.HPA_PROFILE;
 const rate = Number(__ENV.K6_RATE);
 const duration = profile === 'smoke' ? '60s' : profile === 'baseline' ? '300s' : '600s';
-if (!['smoke', 'baseline', 'load', 'stress'].includes(profile) || !Number.isInteger(rate) || rate < 1 || rate > 200) {
-  throw new Error('Expected smoke/baseline/load/stress and an integer K6_RATE in 1..200');
+if (!['smoke', 'baseline', 'load', 'stress', 'extreme'].includes(profile) || !Number.isInteger(rate) || rate < 1 || rate > 200) {
+  throw new Error('Expected smoke/baseline/load/stress/extreme and an integer K6_RATE in 1..200');
 }
 http.setResponseCallback(http.expectedStatuses(200));
 

@@ -50,20 +50,27 @@ if not targets or down:
 PY
 
 echo '== promql'
+http_request_rate=unknown
 while IFS=\$'\t' read -r -u 3 name query; do
   encoded_query=\"\$(python3 -c 'import sys, urllib.parse; print(urllib.parse.quote(sys.argv[1]))' \"\$query\")\"
   kubectl get --raw \"\$prometheus_api/query?query=\$encoded_query\" > /tmp/prometheus-query.json
-  python3 - \"\$name\" /tmp/prometheus-query.json <<'PY'
+  python3 - \"\$name\" /tmp/prometheus-query.json \"\$http_request_rate\" <<'PY'
 import json, sys
-name, path = sys.argv[1], sys.argv[2]
+name, path, request_rate = sys.argv[1:]
 body = json.load(open(path))
 result = body['data']['result']
 print(name + '\t' + json.dumps(result, separators=(',', ':')))
 if body['status'] != 'success' or not result:
     sys.exit(name + ' returned no data')
 if any(r['value'][1] == 'NaN' for r in result):
-    sys.exit(name + ' returned NaN')
+    if name in ('http_5xx_ratio', 'http_p95_seconds') and request_rate != 'unknown' and float(request_rate) == 0:
+        print('WARNING: ' + name + ' is unavailable while http_request_rate is zero', file=sys.stderr)
+    else:
+        sys.exit(name + ' returned NaN')
 PY
+  if [[ \"\$name\" == http_request_rate ]]; then
+    http_request_rate=\"\$(python3 -c 'import json, sys; print(json.load(open(sys.argv[1]))[\"data\"][\"result\"][0][\"value\"][1])' /tmp/prometheus-query.json)\"
+  fi
 done 3< /tmp/promql-queries.tsv
 "
 
