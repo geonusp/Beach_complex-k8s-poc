@@ -723,7 +723,16 @@ run_verify_observability() {
 printf 'kubectl %s\n' "$*" >> "$CALL_LOG"
 case "$*" in
   *'/api/v1/targets'*) cat "$TARGETS_JSON" ;;
-  *'/api/v1/query'*) printf '{"status":"success","data":{"resultType":"vector","result":[{"metric":{},"value":[0,"%s"]}]}}' "$QUERY_VALUE" ;;
+  *'/api/v1/query'*)
+    value="$QUERY_VALUE"
+    if [[ "$QUERY_VALUE" == zero-http-nan || "$QUERY_VALUE" == positive-http-nan ]]; then
+      value=1
+      case "$*" in
+        *histogram_quantile*|*status%3D~*) value=NaN ;;
+        *http_server_requests_seconds_count*) [[ "$QUERY_VALUE" != zero-http-nan ]] || value=0 ;;
+      esac
+    fi
+    printf '{"status":"success","data":{"resultType":"vector","result":[{"metric":{},"value":[0,"%s"]}]}}' "$value" ;;
   '-n beach get svc beach -o jsonpath={.spec.clusterIP}') printf '10.96.0.20' ;;
   *) printf 'fake %s\n' "$*" ;;
 esac
@@ -778,6 +787,28 @@ test_observability_verification_fails_on_nan_result() {
     fail 'verification passed although a query returned NaN'
   fi
   grep -Fq 'returned NaN' "$test_dir/verify-nan-output.txt" || fail 'NaN failure reason was not printed'
+}
+
+test_observability_verification_allows_zero_and_idle_http_nan() {
+  local value
+  for value in 0 zero-http-nan; do
+    run_verify_observability "verify-$value" \
+      '{"data":{"activeTargets":[{"labels":{"job":"beach"},"health":"up","scrapeUrl":"http://10.244.1.5:8081/actuator/prometheus","lastError":""}]}}' \
+      "$value" || { cat "$test_dir/verify-$value-output.txt" >&2; fail 'zero errors or undefined idle HTTP metrics must not block verification'; }
+  done
+  grep -Fq 'http_5xx_ratio' "$test_dir/verify-zero-http-nan-output.txt" || fail 'raw HTTP metric was not preserved'
+  grep -Fq 'NaN' "$test_dir/verify-zero-http-nan-output.txt" || fail 'undefined metric was replaced'
+  grep -Fq 'WARNING: http_5xx_ratio is unavailable while http_request_rate is zero' "$test_dir/verify-zero-http-nan-output.txt" \
+    || fail 'idle metric warning was not printed'
+}
+
+test_observability_verification_rejects_http_nan_with_requests() {
+  if run_verify_observability verify-positive-http-nan \
+    '{"data":{"activeTargets":[{"labels":{"job":"beach"},"health":"up","scrapeUrl":"http://10.244.1.5:8081/actuator/prometheus","lastError":""}]}}' \
+    positive-http-nan; then
+    fail 'undefined HTTP metrics with observed requests must fail verification'
+  fi
+  grep -Fq 'http_5xx_ratio returned NaN' "$test_dir/verify-positive-http-nan-output.txt" || fail 'HTTP NaN failure was not reported'
 }
 
 test_beach_dashboard_matches_verification_queries() {
@@ -880,6 +911,8 @@ main() {
   test_observability_verification_fails_on_down_target
   test_observability_verification_sends_beach_traffic_before_queries
   test_observability_verification_fails_on_nan_result
+  test_observability_verification_allows_zero_and_idle_http_nan
+  test_observability_verification_rejects_http_nan_with_requests
   test_beach_dashboard_matches_verification_queries
   test_beach_dashboard_panels_render_readable_values
   test_beach_dashboard_is_provisioned_for_grafana_sidecar

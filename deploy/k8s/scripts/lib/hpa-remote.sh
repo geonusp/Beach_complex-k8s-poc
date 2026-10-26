@@ -101,7 +101,8 @@ fi
 prometheus_api=/api/v1/namespaces/monitoring/services/http:kube-prometheus-stack-prometheus:9090/proxy/api/v1
 end="$(date -u +%s)"
 printf '%s\t%s\n' k6_cpu_cores 'sum by (pod) (rate(container_cpu_usage_seconds_total{namespace="beach",pod=~"beach-k6-.*",container="k6"}[1m]))' >> "$work_dir/promql-queries.tsv"
-printf '%s\t%s\n' k6_throttled_seconds 'sum by (pod) (rate(container_cpu_cfs_throttled_seconds_total{namespace="beach",pod=~"beach-k6-.*",container="k6"}[1m]))' >> "$work_dir/promql-queries.tsv"
+# The chart drops throttled seconds; retain evidence as the fraction of throttled CFS periods.
+printf '%s\t%s\n' k6_throttled_period_ratio 'sum by (pod) (rate(container_cpu_cfs_throttled_periods_total{namespace="beach",pod=~"beach-k6-.*",container="k6"}[1m])) / sum by (pod) (rate(container_cpu_cfs_periods_total{namespace="beach",pod=~"beach-k6-.*",container="k6"}[1m]))' >> "$work_dir/promql-queries.tsv"
 while IFS=$'\t' read -r -u 3 name query; do
   encoded="$(python3 -c 'import sys,urllib.parse; print(urllib.parse.quote(sys.argv[1], safe=""))' "$query")"
   kubectl --request-timeout=30s get --raw "$prometheus_api/query_range?query=$encoded&start=$start&end=$end&step=30" > "$work_dir/prom-$name.json"

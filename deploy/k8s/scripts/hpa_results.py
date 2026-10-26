@@ -22,7 +22,9 @@ def preflight(data, context):
         raise ValueError("Expected two Terraform app workers")
     for key, host in context["hosts"].items():
         node = nodes[host]
-        if not any(c["type"] == "Ready" and c["status"] == "True" for c in node["status"]["conditions"]) or node["metadata"]["labels"].get("node-role") != context["roles"][key] or not any(a["type"] == "InternalIP" and a["address"] == context["ips"][key] for a in node["status"]["addresses"]):
+        labels = node["metadata"]["labels"]
+        role_matches = "node-role.kubernetes.io/control-plane" in labels if context["roles"][key] == "control-plane" else labels.get("node-role") == context["roles"][key]
+        if not any(c["type"] == "Ready" and c["status"] == "True" for c in node["status"]["conditions"]) or not role_matches or not any(a["type"] == "InternalIP" and a["address"] == context["ips"][key] for a in node["status"]["addresses"]):
             raise ValueError("Terraform and Kubernetes node identity differ")
     for host in apps:
         node = nodes[host]

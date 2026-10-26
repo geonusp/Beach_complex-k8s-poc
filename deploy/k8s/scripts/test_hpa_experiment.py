@@ -68,7 +68,7 @@ echo "$2" >> "$SUITE_CALLS"
     def cluster(self):
         data = fixtures.fixture()
         cp = fixtures.resource("Node", "cp-1", status=dict(conditions=[dict(type="Ready", status="True")]))
-        cp["metadata"]["labels"]["node-role"] = "control-plane"
+        cp["metadata"]["labels"]["node-role.kubernetes.io/control-plane"] = ""
         data["items"].append(cp)
         nodes = [x for x in data["items"] if x["kind"] == "Node"]
         for i, node in enumerate(nodes):
@@ -79,6 +79,19 @@ echo "$2" >> "$SUITE_CALLS"
             pod["spec"]["containers"] = [{"name": "beach", "resources": {"requests": {"cpu": "250m", "memory": "512Mi"}}}]
         data["all_pods"] = [x for x in data["items"] if x["kind"] == "Pod"]
         return data
+
+    def test_preflight_checks_actual_control_plane_and_worker_role_labels(self):
+        import hpa_results as h
+        data = self.cluster()
+        h.preflight(data, self.context())
+        for node in (x for x in data["items"] if x["kind"] == "Node"):
+            with self.subTest(node=node["metadata"]["name"]):
+                bad = copy.deepcopy(data)
+                target = next(x for x in bad["items"] if x["kind"] == "Node" and x["metadata"]["name"] == node["metadata"]["name"])
+                target["metadata"]["labels"].pop("node-role.kubernetes.io/control-plane", None)
+                target["metadata"]["labels"]["node-role"] = "wrong"
+                with self.assertRaises(ValueError):
+                    h.preflight(bad, self.context())
 
     def test_preflight_rejects_existing_hpa_wrong_cluster_and_capacity(self):
         import hpa_results as h
@@ -175,7 +188,7 @@ ssm_run() { if [[ "${TEST_SEND_FAIL:-0}" == 1 ]]; then echo SEND_FAILED >&2; exi
 
     def test_real_remote_shell_preserves_load_failure_and_distinguishes_restore_failure(self):
         root = pathlib.Path(__file__).parent
-        for scenario in ("healthy", "k6_failed", "restore_failed", "api_failed", "preflight_failed", "job_create_failed", "hpa_create_timeout", "terminating"):
+        for scenario in ("healthy", "seconds_filtered", "throttling_missing", "k6_failed", "restore_failed", "api_failed", "preflight_failed", "job_create_failed", "hpa_create_timeout", "terminating"):
             with self.subTest(scenario=scenario), tempfile.TemporaryDirectory() as folder:
                 work = pathlib.Path(folder) / "run.fixture"; work.mkdir()
                 for name in ("hpa_results.py", "failure_results.py", "node_failure_results.py"):
@@ -197,7 +210,9 @@ if 'get pods,' in a:
  if (p/'hpa-created').exists(): d['items'].append(dict(kind='HorizontalPodAutoscaler',metadata=dict(name='test'),spec=dict(scaleTargetRef=dict(kind='Deployment',name='beach')),status=dict(desiredReplicas=2)))
  print(json.dumps(d))
 elif 'get pods -A' in a: print(json.dumps(dict(items=json.loads((p/'cluster.json').read_text())['all_pods'])))
-elif 'get --raw' in a: print(json.dumps(dict(status='success',data=dict(result=[dict(values=[[0,'1']])]))))
+elif 'get --raw' in a:
+ missing=scenario=='seconds_filtered' and 'container_cpu_cfs_throttled_seconds_total' in a or scenario=='throttling_missing' and 'container_cpu_cfs_' in a
+ print(json.dumps(dict(status='success',data=dict(result=[] if missing else [dict(values=[[0,'0']])]))))
 elif 'set env' in a: print('{}')
 elif 'create -f' in a:
  if 'run-hpa.yaml' in a:
@@ -224,12 +239,16 @@ elif 'scale deployment' in a: (p/'scaled').touch()
                 bash = "C:/Program Files/Git/bin/bash.exe" if os.name == "nt" else shutil.which("bash")
                 prefix = 'export PATH="$(cygpath -u "$work_dir")":$PATH; ' if os.name == "nt" else 'export PATH="$work_dir":$PATH; '
                 run = subprocess.run([bash, "-c", prefix + 'source "$TEST_REMOTE"'], env=env, capture_output=True, text=True, timeout=30)
-                self.assertEqual(run.returncode == 0, scenario in ("healthy", "terminating"), run.stdout + run.stderr)
+                self.assertEqual(run.returncode == 0, scenario in ("healthy", "seconds_filtered", "terminating"), run.stdout + run.stderr)
                 calls = (work / "calls").read_text()
                 if scenario == "healthy":
                     self.assertIn('K6_NEW_MACHINE_READABLE_SUMMARY=false', calls)
                     self.assertIn('"name": "k6_cpu_cores"', run.stdout)
-                    self.assertIn('"name": "k6_throttled_seconds"', run.stdout)
+                    self.assertIn('"name": "k6_throttled_period_ratio"', run.stdout)
+                    self.assertIn('container_cpu_cfs_throttled_periods_total', calls)
+                    self.assertIn('container_cpu_cfs_periods_total', calls)
+                if scenario == "throttling_missing":
+                    self.assertIn('Missing Prometheus evidence', run.stderr)
                 if scenario == "preflight_failed":
                     self.assertNotIn('create -f', calls)
                     self.assertNotIn('scale deployment', calls)
