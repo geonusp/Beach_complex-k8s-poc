@@ -3,6 +3,8 @@
 AWS EC2 4노드 kubeadm 클러스터를 만들고 내리는 운영 문서다.
 **상시 운영하지 않는다.** 검증할 때만 만들고 끝나면 완전히 삭제한다.
 
+아래 인스턴스 유형·서브넷은 `terraform.tfvars.example`의 예시다. 실제 배포값은 운영자의 `terraform.tfvars`와 Terraform 출력으로 확인한다.
+
 | 노드 | 역할 | 인스턴스 | 서브넷 |
 | --- | --- | --- | --- |
 | `cp-1` | control-plane | t3.medium | public-a (us-east-1a) |
@@ -72,7 +74,7 @@ aws ssm get-parameters --region us-east-1 \
 
 ### 2-0. 원클릭 생성 및 배포
 
-Terraform 인프라 생성부터 kubeadm·Cilium·GHCR 인증·PostgreSQL·Redis·Beach 배포까지
+Terraform 인프라 생성부터 kubeadm·Cilium·Metrics Server·GHCR 인증·PostgreSQL·Redis·Beach·관측 스택 배포까지
 의존성 순서대로 실행하려면 저장소 루트에서 다음 스크립트를 사용한다.
 
 ```bash
@@ -86,6 +88,7 @@ bash deploy/k8s/scripts/provision-and-deploy.sh
 3. `sync-ghcr-secret.sh`
 4. `deploy-dependencies.sh`
 5. `deploy-beach.sh`
+6. `install-observability.sh`
 
 단계별 동작을 직접 확인해야 하거나 중간 단계만 재실행할 때는 아래 수동 절차를 사용한다.
 
@@ -118,7 +121,7 @@ cd ../../../../..          # 저장소 루트
 bash deploy/k8s/scripts/bootstrap-cluster.sh
 ```
 
-네 단계를 순서대로 실행한다. 각 단계는 **멱등**이라 중간에 실패하면 같은 명령을 다시 돌리면 된다.
+여섯 단계를 순서대로 실행한다. 중간에 실패하면 아래 재실행 절차와 각 스크립트의 검증 결과를 확인한다.
 
 | 단계 | 스크립트 | 하는 일 |
 | --- | --- | --- |
@@ -126,6 +129,8 @@ bash deploy/k8s/scripts/bootstrap-cluster.sh
 | 2 | `join-workers.sh` | 토큰 발급 후 워커 3대 join |
 | 3 | `install-cilium.sh` | Helm으로 Cilium 설치 |
 | 4 | `label-nodes.sh` | 노드 역할 라벨 부여 |
+| 5 | `approve-kubelet-serving-csrs.sh` | kubelet-serving CSR 확인 및 승인 |
+| 6 | `install-metrics-server.sh` | Metrics Server 설치 |
 
 개별 실행도 가능하다.
 
@@ -135,7 +140,7 @@ bash deploy/k8s/scripts/label-nodes.sh      # 라벨만 다시
 ```
 
 실패한 단계만 다시 실행할 수 있다. `bootstrap-cluster.sh`를 다시 실행하면 이미 초기화된
-Control Plane과 join 완료 Worker는 건너뛰고 Cilium·라벨·최종 검증을 재수행한다.
+Control Plane과 join 완료 Worker는 건너뛰고 Cilium·라벨·kubelet-serving CSR 승인·Metrics Server·최종 검증을 재수행한다.
 
 ---
 

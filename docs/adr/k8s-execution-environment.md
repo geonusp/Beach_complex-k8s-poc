@@ -53,9 +53,10 @@ Kubernetes 실행 환경을 **AWS EC2 기반 self-managed kubeadm 클러스터 4
 |---|---|---:|---|---|
 | Control Plane | `control-plane` | 1 | t3.medium | `node-role.kubernetes.io/control-plane:NoSchedule` taint 유지 |
 | App Worker | `app` | 2 | t3.small | 앱 Pod 분산 배치, HPA 확장 대상 |
-| Observability Worker | `observability` | 1 | t3.medium | 관측 워크로드 전용 (이슈 #5에서 채움) |
+| Observability Worker | `observability` | 1 | t3.medium | 관측 스택·Metrics Server·k6 Job 배치 |
 
-공통 사양은 x86_64 Ubuntu Server 24.04 LTS, root gp3 20 GiB, On-Demand다.
+Terraform 예시 기준 공통 사양은 x86_64 Ubuntu Server 24.04 LTS, root gp3 30 GiB, On-Demand다.
+인스턴스 유형·볼륨 크기는 [`terraform.tfvars.example`](../../deploy/k8s/terraform/environments/dev/terraform.tfvars.example)의 예시이며 실제 배포값을 보장하지 않는다.
 
 **x86(t3)을 쓰는 이유.** 비용 문서는 t4g(ARM/Graviton)를 최종 추천했고 상시 운영이라면 그 판단이 옳다
 (t3 약 `$172/월` 대 t4g 절감형 약 `$82/월`). 그러나 아래 운영 모델대로 40시간만 실행하면
@@ -82,14 +83,16 @@ Kubernetes 실행 환경을 **AWS EC2 기반 self-managed kubeadm 클러스터 4
 
 ### 운용 방식
 
-**AWS 클러스터는 상시 운영하지 않는다.** 비용 문서의 2단계 운영 모델을 그대로 따른다.
+**AWS 클러스터는 상시 운영하지 않는다.** 비용 문서의 2단계 운영 모델은 초기 계획이다.
+현재 저장소의 생성·실험 절차는 AWS kubeadm 기준이며, kind 구성 파일과 로컬 1차 검증 실행 근거는 이 저장소에서 확인하지 못했다.
+따라서 아래 kind 단계는 현재 재현 가능한 절차나 수행 완료 항목으로 취급하지 않는다.
 
 | 단계 | 환경 | 용도 | AWS 비용 |
 |---|---|---|---|
-| 1 | **로컬 kind 4노드** | 매니페스트, 리소스 동작, 실험 절차의 1차 검증 | $0 |
+| 1 (초기 계획·수행 미확인) | **로컬 kind 4노드** | 매니페스트, 리소스 동작, 실험 절차의 1차 검증 | $0 |
 | 2 | AWS EC2 4노드 | 노드 분리·장애 영역·클라우드 통합 검증, 부하 실험 | 실행 시간에 비례 |
 
-- **kind는 폐기하지 않는다.** 주 개발 환경으로 유지하고, 로컬에서 통과한 것만 AWS로 올린다.
+- kind를 매니페스트 검증에 사용하는 방안은 남기되, 로컬 검증을 AWS 실행의 필수 선행 절차로 안내하지 않는다.
 - 검증이 끝나면 `terraform destroy`로 **EBS까지 완전히 삭제한다.** EC2 `stop`은 EBS 요금이 계속
   발생하므로 절감 수단으로 쓰지 않는다.
 - 클러스터 재생성이 항상 가능해야 하므로 etcd 데이터를 별도 볼륨에 보존하지 않는다.
@@ -209,8 +212,8 @@ Kubernetes 실행 환경을 **AWS EC2 기반 self-managed kubeadm 클러스터 4
 
 다음 조건이 발생하면 실행 환경을 재검토한다.
 
-- 상시 비용이 감당 범위를 넘어선다. → kind로 회귀한다. 매니페스트는 그대로 재사용 가능하므로
-  회귀 비용은 IaC와 부트스트랩 스크립트에 한정된다.
+- 상시 비용이 감당 범위를 넘어선다. → kind 전환을 재검토한다. 매니페스트 재사용 가능성은
+  kind 검증 근거가 이 저장소에 없으므로 구성·스토리지·배치 조건과 전환 비용을 별도로 확인한다.
 - 클러스터 운영 부담으로 실험 일정이 지연된다. 계획서가 예상한 위험이 현실화된 경우다.
 - 단일 Control Plane 장애가 반복되어 실험 진행이 막힌다. → CP 다중화 또는 EKS를 재검토한다.
 - 관리형 서비스 경험이 더 중요해진다. → EKS 전환을 별도 ADR로 다룬다.
