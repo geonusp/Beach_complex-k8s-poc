@@ -26,9 +26,10 @@ GHCR 패키지는 기본 private으로 취급한다. public 패키지를 선택�
 생성하는 절차를 유지하면 공개 범위 변경이 Deployment 매니페스트에 영향을 주지 않는다.
 
 배포할 이미지 태그를 SHA로 고정하려면 적용 전에 Kustomize image를 변경한다.
+다음 명령은 저장소 루트와 별도 Kustomize CLI가 있는 환경을 전제로 한다.
 
 ```bash
-kustomize edit set image beach-backend=ghcr.io/geonusp/beach_complex-k8s-poc-backend:<IMAGE_SHA>
+(cd deploy/k8s/app && kustomize edit set image beach-backend=ghcr.io/geonusp/beach_complex-k8s-poc-backend:<IMAGE_SHA>)
 kubectl apply -k deploy/k8s/app
 ```
 
