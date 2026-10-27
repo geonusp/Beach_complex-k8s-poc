@@ -154,7 +154,7 @@ Terraform 예시 기준 공통 사양은 x86_64 Ubuntu Server 24.04 LTS, root gp
 - **실행 시간에 비례해 비용이 발생한다.** 40시간 기준 약 `$6`이지만, 삭제를 잊고 한 달을 켜두면
   약 `$172`(20만원 상당)가 된다. 즉 비용 위험은 단가가 아니라 **삭제 누락**에 있다.
   기존 앱 EC2·관측 EC2까지 포함하면 실험 중에는 총 6대가 동시에 떠 있다.
-- **단일 Control Plane이다.** CP 노드가 죽으면 클러스터 전체가 정지하고 etcd 스냅샷도 받지 않는다.
+- **단일 Control Plane이다.** CP 노드 장애 시 API·스케줄링·제어 기능을 사용할 수 없고 etcd 스냅샷도 받지 않는다. 기존 앱의 요청 영향은 실측하지 않았다.
   이슈 #6의 장애 실험을 App Worker와 Pod로 한정해야 한다.
 - **클러스터 운영 부담이 커진다.** 계획서가 kubeadm을 선택 과제로 둔 이유가 그대로 현실화된다.
   인증서 갱신, join 토큰 만료, CNI 상태 관리가 모두 직접 관리 대상이 된다.
@@ -241,10 +241,10 @@ Terraform 예시 기준 공통 사양은 x86_64 Ubuntu Server 24.04 LTS, root gp
 - [Pod network add-on 선택 — Cilium](./cilium-cni.md)
 - `Beach-complex/docs` 저장소 `ADR-016 관측 인프라 IaC 도입 — Terraform + cloud-init`
   — 재검토 기준의 "Kubernetes 전환" 항목이 이 결정에 해당한다
-- [`../cost.md`](../cost.md)
+- `../cost.md` (로컬 참고·Git 미포함)
   — 4노드 기준 아키텍처와 2단계 운영 모델의 출처. 이 문서의 전제다
-- [`../plan.md`](../plan.md) `4.5` — 이 문서가 정정하는 항목
-- [`../../tempdocs/issue-1/`](../../tempdocs/issue-1/) — 이슈 #1 PR 1~5 구현 문서
+- `../plan.md` (로컬 참고·Git 미포함) `4.5` — 이 문서가 정정하는 항목
+- `../../tempdocs/issue-1/` (로컬 참고·Git 미포함) — 이슈 #1 PR 1~5 구현 문서
 
 ## 작성일자
 

@@ -16,7 +16,7 @@ Workflow·결과·이력을 관리하는 플랫폼이다. 다만 Testkube Agent 
 
 이 저장소의 AWS 클러스터는 월 40시간 이하만 실행하는 단명 환경이다. Terraform으로
 클러스터를 삭제하면 Kubernetes 내부 상태도 사라지므로, 테스트 정의와 실행 결과는
-클러스터 외부(Git 저장소와 CI artifact)에 남겨야 한다.
+클러스터 외부에 남겨야 한다. 현재 정의는 Git, 전체 원본은 SSM/S3 회수 후 로컬에 보관하며 일부 증거만 Git에 복사한다. CI artifact 자동 회수는 연결돼 있지 않다.
 
 또한 기존 [k6 부하 생성기 실행 위치 ADR](./load-generator-placement.md)은
 현재 `obs-1`의 Kubernetes Job을 사용하고, HPA 고부하 단계에서 별도 EC2를 재검토하도록 정리한다.
@@ -27,7 +27,7 @@ Workflow·결과·이력을 관리하는 플랫폼이다. 다만 Testkube Agent 
 **`obs-1`에서 실행하는 Kubernetes Job**으로 구성한다.
 
 - k6 시나리오와 임계값은 저장소에 JavaScript 파일로 관리한다.
-- 기본 실행은 `kubectl apply`와 `kubectl logs`로 수행한다. GitHub Actions의 수동 실행(`workflow_dispatch`)과
+- 현재 기본 진입점은 SSM 실험 실행 스크립트이며 내부에서 Job 실행과 로그 회수를 수행한다. GitHub Actions의 수동 실행(`workflow_dispatch`)과
   결과 artifact 보관은 반복 실행이 필요할 때 선택적으로 추가한다.
 - k6 Job은 `nodeSelector`로 `obs-1`에 배치하고 CPU·메모리 `requests/limits`를 지정한다.
 - k6 원본 결과(JSON/summary)는 GitHub Actions artifact 또는 저장소 외부 보관 위치에 저장한다.
@@ -49,15 +49,14 @@ Workflow·결과·이력을 관리하는 플랫폼이다. 다만 Testkube Agent 
 
 ## 근거
 
-- **현재 부하 규모:** 몇 번의 호출과 짧은 smoke/Rolling Update 검증이 목표라 별도 EC2를 추가하지 않는다.
+- **부하 범위:** 초기 smoke/Rolling Update에 이어 [#4 extreme 120 req/s](../experiments/issue-4/README.md)까지 `obs-1` Job으로 실측했다. 별도 EC2는 아직 구현하지 않았으며 부하 생성기 지표와 관측 간섭을 함께 검토한다.
 - **실험 기준 통일:** 이슈 #3과 #4의 기본 실험은 같은 `obs-1` Job과 요청 경로를 사용해 #8에서 실행 위치가 다른 수치를 섞지 않는다.
 - **단명 클러스터와의 정합성:** 클러스터를 destroy해도 k6 스크립트와 CI 실행 기록은
   클러스터 외부에 남는다.
 - **비용:** Testkube Agent나 Control Plane, 별도 EC2를 기본 클러스터에 추가하지 않는다.
 - **학습 범위:** 이슈 #4의 목표는 테스트 플랫폼 구축이 아니라 HPA 반응과 애플리케이션
   성능 지표를 검증하는 것이다.
-- **기존 결정과 일관성:** 낮은 요청량의 단기 Job만 `obs-1` 예외로 허용하고, 고부하 단계에서는
-  관측 워크로드와 분리한다.
+- **기존 결정과 일관성:** 현재 `obs-1` 예외로 실행하되, 고부하에서 자원 경쟁이나 부하 생성 한계가 확인되면 관측 워크로드와 분리하는 방안을 재검토한다.
 - **noisy neighbor 방지:** k6가 Prometheus/Grafana와 CPU·메모리를 과도하게 경쟁하면 관측 데이터와
   HPA 결과가 왜곡될 수 있으므로, 고부하 단계에서는 조건부로 별도 EC2를 도입한다.
 

@@ -7,7 +7,7 @@ Proposed — 현재는 `obs-1`의 Kubernetes Job을 사용하고, HPA 고부하 
 ## 컨텍스트
 
 이슈 #3(Rolling Update 사용자 영향)과 이슈 #4(HPA 및 부하 테스트)는 모두 k6로 요청을 보내면서
-throughput, 오류율, p50/p95/p99 latency를 측정한다. 저장소에는 아직 k6 시나리오와 실행 환경이 없다.
+throughput, 오류율, p50/p95/p99 latency를 측정한다. ADR 작성 당시에는 실행 환경을 정하는 단계였으며 현재는 [`deploy/k8s/loadtest`](../../deploy/k8s/loadtest/)와 SSM 실행 스크립트가 구현돼 있다.
 
 k6를 어디서 실행하느냐는 두 이슈의 측정값에 직접 영향을 준다.
 
@@ -25,8 +25,8 @@ k6를 어디서 실행하느냐는 두 이슈의 측정값에 직접 영향을 �
 
 그런데 [Ephemeral 의존성 배치 ADR](./ephemeral-dependency-placement.md)(Accepted)은
 "`obs-1`은 관측 워크로드 전용으로 유지한다"고 결정했고, 근거로 "관측 스택과 자원 경계 유지"를 들었다.
-현재 결정은 낮은 요청량의 단기 k6 Job에 한해 이 원칙의 예외를 두는 것이다. 이슈 #5에서
-Prometheus·Grafana가 `obs-1`에 배치되면 k6와 자원을 경쟁하므로, 고부하 실험에서는 예외를 유지하지 않는다.
+현재 결정은 k6 Job에 이 원칙의 예외를 두는 것이다. Prometheus·Grafana와 자원을 공유하므로
+고부하 실험에서는 관측 지표를 확인하고, 자원 경쟁이나 부하 생성 한계가 확인되면 별도 EC2로 분리한다.
 
 또한 현재 Beach는 클러스터 밖에서 접근할 경로가 자동화되어 있지 않다. ingress-nginx 설치는
 `deploy/k8s/app/README.md`에 수동 절차로만 있고, 클러스터 Security Group은 노드끼리만 통신을 허용한다.
@@ -38,10 +38,10 @@ Prometheus·Grafana가 `obs-1`에 배치되면 k6와 자원을 경쟁하므로, 
 - k6는 클러스터 내부 Job으로 실행하고, `nodeSelector`로 `obs-1`에만 배치한다.
 - Job에는 CPU·메모리 `requests/limits`와 완료 후 자동 정리 TTL을 지정한다.
 - 짧은 smoke/Rolling Update 검증과 낮은 요청량의 기본 테스트는 이 방식으로 수행한다.
-- 기본 실행은 `kubectl apply`와 `kubectl logs`로 수행한다. GitHub Actions의 Job 실행·artifact 보관은 선택적 자동화로 둔다.
+- 현재 운영자는 [실험 결과 종합](../experiments/issue-8/README.md)의 회차별 SSM 실행 절차를 따른다. 내부적으로 Job 실행과 로그 회수를 사용하며 GitHub Actions 실행·artifact 보관은 현재 연결되지 않은 선택적 자동화다.
 - HPA 고부하 실험을 시작할 때 `obs-1`의 Prometheus/Grafana와 자원 경쟁이 발생하면,
   같은 리전의 별도 EC2 부하 생성기로 전환한다.
-- 별도 EC2는 지금 Terraform에 구현하지 않으며, HPA 실험이 실제로 필요해질 때 조건부 리소스로 추가한다.
+- 별도 EC2는 현재 Terraform에 구현돼 있지 않다. [#4 HPA 실측](../experiments/issue-4/README.md)은 extreme 120 req/s까지 같은 `obs-1` Job 경로를 사용했다. 이것이 모든 고부하에서 자원 간섭이 없다는 증거는 아니다.
 
 ### 범위 제외
 
@@ -58,7 +58,7 @@ Prometheus·Grafana가 `obs-1`에 배치되면 k6와 자원을 경쟁하므로, 
 - 이슈 #3과 #4의 낮은 요청량 실험은 같은 `obs-1` Job 경로를 사용해야 한다. 그래야 #8 최종 결과에서
   실행 위치, 네트워크 경로, k6 실행 환경이 다른 수치를 섞지 않고 비교할 수 있다.
 - k6가 같은 노드의 Prometheus/Grafana와 CPU·메모리를 과도하게 경쟁하는 **noisy neighbor(시끄러운 이웃)**
-  상황을 피해야 한다. 현재는 낮은 요청량과 Job의 `requests/limits`로 영향을 제한하고, 고부하에서는 별도 EC2로 분리한다.
+  상황을 피해야 한다. 현재는 Job의 `requests/limits`와 CPU·throttling 표본으로 관찰하며, 필요한 요청률을 만들지 못하거나 관측 지연이 확인되면 별도 EC2 전환을 재검토한다.
 - 관측 노드의 자원 경쟁은 낮은 요청량에서는 제한할 수 있고, HPA 고부하 단계에서 별도 EC2로 재검토할 수 있다.
 
 ## 결과
@@ -84,7 +84,7 @@ Prometheus·Grafana가 `obs-1`에 배치되면 k6와 자원을 경쟁하므로, 
 
 - 장점: 인프라 변경이 없다. PR 3개로 끝난다. 클러스터 안에서 Service를 직접 호출할 수 있어 경로가 단순하다.
 - 단점: Accepted ADR의 `obs-1` 전용 원칙에 단기 예외가 필요하고, #5 이후에는 Prometheus와 자원을 경쟁한다.
-  고부하 HPA 실험에서는 별도 EC2로 전환해야 한다.
+  고부하 HPA 실험에서는 관측 스택과의 자원 경쟁 및 별도 EC2 전환 필요성을 확인해야 한다.
 - 결론: **현재 기본 선택.** Job에 노드 선택과 requests/limits를 지정하고, HPA 고부하 단계에서 별도 EC2 전환을 평가한다.
 
 ### 선택지 2: App Worker에서 실행
@@ -132,7 +132,7 @@ Prometheus·Grafana가 `obs-1`에 배치되면 k6와 자원을 경쟁하므로, 
 
 - [Ephemeral 의존성 배치](./ephemeral-dependency-placement.md)
 - [노드 접근 방식](./node-access-ssm.md)
-- [이슈 #3 구현 문서](../../tempdocs/issue-3/README.md)
+- 이슈 #3 구현 문서 (로컬 참고·Git 미포함: `../../tempdocs/issue-3/README.md`)
 
 ## 작성일자
 

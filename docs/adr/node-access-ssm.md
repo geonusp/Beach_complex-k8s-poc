@@ -48,7 +48,7 @@ Kubernetes 노드는 실험 단위로 `destroy` 후 재생성하는 운영 모�
 
 - SSH 22번 인바운드 규칙을 **만들지 않는다.**
 - 키페어를 쓰지 않는다. `key_name`을 지정하지 않는다.
-- 노드 IAM Role에 관리형 정책 `AmazonSSMManagedInstanceCore` **하나만** 부착한다.
+- 노드가 공유하는 IAM Role에 관리형 정책 `AmazonSSMManagedInstanceCore`를 부착한다. 현재 Terraform은 GHCR 파라미터 읽기와 SSM 결과 S3 출력 쓰기용 인라인 정책도 함께 부여한다.
 - 부트스트랩 스크립트는 대상을 **instance ID로 지정**하고, 그 값은 Terraform output에서 읽는다.
   IP를 하드코딩하지 않는다.
 - 네트워크 경로는 **퍼블릭 서브넷 + IGW**를 통한 아웃바운드 443이다. VPC 엔드포인트는 만들지 않는다.
@@ -76,7 +76,7 @@ Kubernetes 노드는 실험 단위로 `destroy` 후 재생성하는 운영 모�
 
 - **대상 지정이 IP가 아니라 instance ID다.** 재생성해도 스크립트를 고칠 필요가 없다.
   재현성이 완료 기준인 이 프로젝트에서 가장 큰 이득이다.
-- **인바운드 규칙이 0개가 된다.** 노드가 아웃바운드 443으로 SSM 엔드포인트에 연결하고
+- **SSM 접속을 위한 인바운드 규칙이 필요 없다.** 노드 간 통신용 SG self 규칙과 선택적 API 접근 규칙은 별도로 존재한다. 노드가 아웃바운드 443으로 SSM 엔드포인트에 연결하고
   세션은 그 위에서 역방향으로 열린다. 22번을 어디에도 노출하지 않는다.
 - **키페어 수명주기 문제가 사라진다.** 배포·보관·폐기할 `.pem` 파일이 없다.
 - **앱 서버 SG 의존이 사라진다.** 기존 모듈은 `app_server_security_group_id`를 필수 입력으로 받는데,
@@ -99,7 +99,7 @@ Kubernetes 노드는 실험 단위로 `destroy` 후 재생성하는 운영 모�
 - **아웃바운드 443 경로가 반드시 필요하다.** 현재 VPC에는 NAT Gateway가 없으므로
   프라이빗 서브넷으로 옮기려면 NAT Gateway나 VPC 엔드포인트 3개(`ssm`, `ssmmessages`, `ec2messages`)를
   새로 만들어야 하고 둘 다 시간당 과금된다. 퍼블릭 서브넷 배치가 사실상 유일한 저비용 경로다.
-- 로컬에 `session-manager-plugin`을 설치해야 한다.
+- Session Manager 대화형 접속·포트 포워딩에는 로컬 `session-manager-plugin`이 필요하다. Run Command만 사용하는 부트스트랩·실험 실행은 이 플러그인을 요구하지 않는다.
 - **Run Command 출력이 잘린다.** 기본 한도가 있어 `kubeadm init`처럼 긴 출력은
   S3 또는 CloudWatch Logs로 내보내야 할 수 있다.
 - SSM Agent에 의존한다. Ubuntu Server 24.04 AMI에는 기본 포함되지만 부팅 후 확인이 필요하다.
@@ -142,7 +142,7 @@ Kubernetes 노드는 실험 단위로 `destroy` 후 재생성하는 운영 모�
 3. 부트스트랩 스크립트가 `aws ssm send-command`로 `kubeadm init`과 `join`을 실행하고 결과를 회수한다.
 4. `terraform destroy` 후 재생성했을 때, 스크립트 수정 없이 동일하게 동작한다.
    (instance ID는 Terraform output에서 읽으므로 변경분이 자동 반영된다)
-5. IAM Role에 부착된 정책이 `AmazonSSMManagedInstanceCore` 하나인지 확인한다.
+5. 관리형 `AmazonSSMManagedInstanceCore`와 GHCR 파라미터·S3 출력용 인라인 정책의 범위가 Terraform 구성과 일치하는지 확인한다.
 
 ## 롤백 / 재검토 기준
 
@@ -176,8 +176,8 @@ Kubernetes 노드는 실험 단위로 `destroy` 후 재생성하는 운영 모�
 ### 관련 문서
 
 - [Kubernetes 실행 환경 — AWS kubeadm 4노드](./k8s-execution-environment.md) — 재생성 운영 모델의 근거
-- [`../../tempdocs/issue-1/pr-2-node-infrastructure.md`](../../tempdocs/issue-1/pr-2-node-infrastructure.md) — SG·IAM 구현
-- [`../../tempdocs/issue-1/pr-4-kubeadm-cilium.md`](../../tempdocs/issue-1/pr-4-kubeadm-cilium.md) — Run Command 기반 부트스트랩
+- `../../tempdocs/issue-1/pr-2-node-infrastructure.md` (로컬 참고·Git 미포함) — SG·IAM 구현
+- `../../tempdocs/issue-1/pr-4-kubeadm-cilium.md` (로컬 참고·Git 미포함) — Run Command 기반 부트스트랩
 - `deploy/observability/terraform/modules/observability_ec2/main.tf` — 기존 SSH 방식
 
 ## 작성일자

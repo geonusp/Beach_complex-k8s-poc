@@ -135,7 +135,7 @@ readiness에 외부 의존성을 넣으면, 그 의존성의 장애가 모든 Po
 ### 관련 문서
 
 - [Ephemeral 의존성 배치](./ephemeral-dependency-placement.md)
-- [이슈 #3 구현 문서](../../tempdocs/issue-3/README.md)
+- 이슈 #3 구현 문서 (로컬 참고·Git 미포함: `../../tempdocs/issue-3/README.md`)
 
 ## 작성일자
 

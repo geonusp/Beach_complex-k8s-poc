@@ -3,7 +3,7 @@
 ## 상태
 
 Proposed — Metrics Server를 `obs-1`에 설치하고, kubelet 인증서 검증은 `serverTLSBootstrap`으로 유지한다.
-기반 작업 #24는 머지됐고 설치 #25는 리뷰 중이다.
+현재 저장소의 bootstrap에 CSR 승인·Metrics Server 설치 단계가 포함돼 있다. 아래에는 2026-10-14 검증 기록을 보존하며, 이 문서 검토로 Proposed 상태를 변경하지 않는다.
 
 ## 컨텍스트
 

@@ -146,7 +146,7 @@ ssm_run "$(terraform -chdir=deploy/k8s/terraform/environments/dev output -raw co
 새 이미지와 환경변수가 실제 파드에 적용됐는지 확인했다.
 
 ```bash
-ssm_run "$(terraform -chdir=deploy/k8s/terraform/environments/dev output -raw control_plane_instance_id)" "export KUBECONFIG=/root/.kube/config; kubectl -n beach get pod <beach-pod> -o jsonpath='{.spec.containers[0].image}{"\\n"}'; kubectl -n beach get secret beach-runtime -o jsonpath='{.data}'"
+ssm_run "$(terraform -chdir=deploy/k8s/terraform/environments/dev output -raw control_plane_instance_id)" "export KUBECONFIG=/root/.kube/config; kubectl -n beach get pod <beach-pod> -o jsonpath='{.spec.containers[0].image}{"\\n"}'; kubectl -n beach describe secret beach-runtime"
 ```
 
 Secret 값 자체는 출력하지 않고 키 존재 여부만 확인한다. Redis 연결 수정은 새 애플리케이션 이미지에 포함되어야 하므로 GHCR 이미지 빌드·푸시 완료 여부도 별도로 확인한다.
@@ -286,6 +286,8 @@ git diff --check
 - [ ] **알림/모니터링:** `rollout status`, actuator health, Redis/PostgreSQL EndpointSlice 알람 보강
 
 ### 남은 작업
+
+아래 체크리스트는 2026-10-06 장애 정리 당시의 잔여 기록이다. 이후 실행된 배포·API·readiness 검증은 [#3 실험 결과](../experiments/issue-3/README.md)를 따른다. 당시 미확인 항목을 그 실행에서 확인한 것으로 소급 변경하지 않는다.
 
 - [ ] 새 애플리케이션 이미지 GHCR push 후 dev 클러스터 재배포
 - [ ] 실제 파드 Ready 및 actuator health 수동 검증

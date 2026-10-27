@@ -110,7 +110,7 @@ VPC를 새로 만들거나 CIDR을 바꾸는 경우에는 이 검증을 다시 �
   iptables보다 덜 민감하다는 것은 알려진 특성이지만, **4노드·소수 Pod 규모에서는 측정되지 않는다.**
   Calico도 eBPF 데이터플레인 모드를 제공하므로 "eBPF냐 아니냐"가 곧 "Cilium이냐 아니냐"도 아니다.
   계획서 `6.4`가 kube-proxy datapath 성능 비교를 범위 밖으로 둔 것과도 일치한다.
-  이 주제는 후속 확장([`../cilium-ebpf-roadmap.md`](../cilium-ebpf-roadmap.md))에서 다룬다.
+  이 주제는 후속 확장(`../cilium-ebpf-roadmap.md` (로컬 참고·Git 미포함))에서 다룬다.
 
 ## 결과
 
@@ -238,9 +238,9 @@ Cilium은 정책으로 패킷을 드롭할 수 있을 뿐, HTTP 500이나 지연
 ### 관련 문서
 
 - [Kubernetes 실행 환경 — AWS kubeadm 4노드](./k8s-execution-environment.md) — 이 결정의 전제
-- [`../plan.md`](../plan.md) `6.1 M12` — 이 결정에 따라 정정된 항목 (정정 전에는 `6.2 S6`)
-- [`../cilium-ebpf-roadmap.md`](../cilium-ebpf-roadmap.md) — 후속 eBPF 심화 로드맵
-- [`../../tempdocs/issue-1/pr-4-kubeadm-cilium.md`](../../tempdocs/issue-1/pr-4-kubeadm-cilium.md) — 구현 절차
+- `../plan.md` (로컬 참고·Git 미포함) `6.1 M12` — 이 결정에 따라 정정된 항목 (정정 전에는 `6.2 S6`)
+- `../cilium-ebpf-roadmap.md` (로컬 참고·Git 미포함) — 후속 eBPF 심화 로드맵
+- `../../tempdocs/issue-1/pr-4-kubeadm-cilium.md` (로컬 참고·Git 미포함) — 구현 절차
 
 ## 작성일자
 
