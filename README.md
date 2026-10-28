@@ -17,8 +17,6 @@ AWS EC2에 Control Plane 1대, App Worker 2대, Observability Worker 1대를 구
 
 ![Beach Kubernetes PoC 아키텍처: 4노드 역할, 내부 Service 부하 경로, 관측 및 SSM 운영 흐름](./assets/architecture/beach-k8s-poc-architecture-v4.png)
 
-[확대 보기(SVG)](./assets/architecture/beach-k8s-poc-architecture-v4.svg) · [PDF](./assets/architecture/beach-k8s-poc-architecture-v4.pdf)
-
 `cbceba45`의 저장소 구성 기준이며 인스턴스 유형·AZ는 Terraform 예시값입니다. 실험 부하는 내부 Service 경로이고 외부 Ingress controller·DNS는 미검증입니다. HPA는 실험 중에만 생성하며, PostgreSQL·Redis는 각 1 replica로 App Worker 영역에 배치하되 서로 다른 노드 배치를 보장하지 않습니다.
 
 | 노드 | 역할 | 예시 인스턴스 유형 |
