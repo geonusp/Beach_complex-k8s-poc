@@ -84,7 +84,7 @@
 - 배포·실험: `deploy/k8s/scripts/`의 provision, bootstrap, GHCR Secret, 앱/관측 설치, observability 검증, SSM 출력 회수 및 k6 실행 정의를 대조했다. 코드·셸·매니페스트는 수정하지 않았다.
 - Markdown 파일의 상대 링크를 검사했다. 로컬 계획·cost·plan·roadmap의 끊어진 링크 14개는 Git 미포함 참고 경로임을 표시했다. 외부 URL 내용 전수 검증이나 모든 anchor 렌더링 검사는 아니다.
 - #3·#5 공개 증거 8개 SHA-256이 문서와 일치했다. #4·#6 수치는 기존 상세 결과를 인용했고 전체 원본 재집계는 하지 않았다.
-- 다이어그램의 SVG·PNG·PDF·생성 소스는 앞선 리뷰 반영본이다. PNG 육안 확인을 했으며 PDF 페이지·GitHub 화면 렌더링은 미확인이다. Chrome 재생성은 환경 의존성이 남아 있다.
+- 다이어그램의 SVG·PNG·PDF는 앞선 리뷰 반영본이다. PNG 육안 확인을 했으며 PDF 페이지·GitHub 화면 렌더링은 미확인이다.
 - 새 환경 재현·실제 클러스터 실행·Node 장애·NetworkPolicy/Hubble·노드 자동확장은 검증하지 않았다. 문서 정적 검토 완료와 #8 전체 완료를 구분한다.
 
 ## 참고
