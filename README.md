@@ -50,14 +50,6 @@ Metrics Server는 HPA가 사용하는 resource metrics를 제공합니다. Postg
 - #6의 Node 장애 실측, #7 NetworkPolicy/Hubble, #18 분석 데모, #13 노드 자동확장은 후속 범위입니다. Cilium 사용을 NetworkPolicy/Hubble 검증 완료로 표현하지 않습니다.
 - #8은 문서 정합성과 재현 절차를 검토하는 단계이며 전체 문서 검토·새 환경 재현 완료를 뜻하지 않습니다.
 
-## 테스트와 협업
-
-- 단위 테스트와 통합 테스트를 함께 운영합니다.
-- Testcontainers를 사용해 데이터베이스 연동 테스트를 검증합니다.
-- GitHub Actions에서 빌드, 테스트, 커버리지 리포트 업로드를 수행합니다.
-- 원본 서비스의 협업 규칙·기술 결정·트러블슈팅은 `Beach-complex/docs`에서, PoC 운영·실험 문서는 이 저장소에서 관리합니다.
-- `.github/ISSUE_TEMPLATE`, `.github/PULL_REQUEST_TEMPLATE`, `.github/pull_request_template.md`로 이슈와 PR 양식을 관리합니다.
-
 ## 실행 방법
 
 ### Kubernetes PoC
