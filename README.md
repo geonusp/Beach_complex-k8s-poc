@@ -35,8 +35,6 @@ Metrics Server는 HPA가 사용하는 resource metrics를 제공합니다. Postg
 
 ### 실험 기록
 
-아래는 기존 실험 문서에 기록된 회차별 결과입니다. 현재 클러스터 상태나 새 환경에서의 재실행 결과가 아닙니다. 조건이 다른 회차를 성능 개선의 전후 비교로 사용하지 않습니다.
-
 | 항목 | 기록된 결과와 범위 | 상세 근거 |
 | --- | --- | --- |
 | Rolling Update (#3) | 대표 회차 389건 모두 HTTP 200, dropped iteration 1건. 기본·조정 설정 비교는 현재 범위에서 제외 | [실행 조건·원본](./docs/experiments/issue-3/README.md) |
@@ -55,18 +53,6 @@ Metrics Server는 HPA가 사용하는 resource metrics를 제공합니다. Postg
 - PostgreSQL·Redis는 각 1 replica이며 영속 볼륨을 사용하지 않는 검증용 구성입니다. Redis는 앱 readiness에 포함됩니다. 관측·의존성 데이터의 보존 제약은 [비용·삭제·비밀정보 안내](./docs/kubernetes-ephemeral-cluster-cost-and-secrets.md)와 [의존성 배치 ADR](./docs/adr/ephemeral-dependency-placement.md)을 확인합니다.
 - #6의 Node 장애 실측, #7 NetworkPolicy/Hubble, #18 분석 데모, #13 노드 자동확장은 후속 범위입니다. Cilium 사용을 NetworkPolicy/Hubble 검증 완료로 표현하지 않습니다.
 - #8은 문서 정합성과 재현 절차를 검토하는 단계이며 전체 문서 검토·새 환경 재현 완료를 뜻하지 않습니다.
-
-## API 영역
-
-현재 코드 기준으로 아래 컨트롤러가 구성되어 있습니다.
-
-- `AuthController`
-- `BeachController`
-- `BeachConditionController`
-- `BeachFacilityController`
-- `ReservationController`
-- `UserFavoriteController`
-- `NotificationController`
 
 ## 테스트와 협업
 
