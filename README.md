@@ -1,15 +1,15 @@
 # Beach Complex — Kubernetes PoC
 
 공공데이터를 바탕으로 전국 해수욕장 정보를 조회하고, 상태 정보, 즐겨찾기, 예약, 알림 기능까지 함께 제공하는 해수욕장 서비스 프로젝트입니다.  
-이 저장소는 팀 프로젝트인 [원본 백엔드](https://github.com/Beach-complex/Beach_complex)를 기반으로, **ginu가 단독으로 수행한 Kubernetes 운영 PoC**입니다. 원본 서비스의 개발 범위와 이 저장소에서 추가한 인프라 구성·실험 결과를 구분합니다.
+이 저장소는 팀 프로젝트인 [원본 백엔드](https://github.com/Beach-complex/Beach_complex)를 기반으로, **단독으로 수행한 Kubernetes 운영 PoC**입니다. 원본 서비스의 개발 범위와 이 저장소에서 추가한 인프라 구성·실험 결과를 구분합니다.
 
 ## 프로젝트 개요
 
-- 프로젝트 성격: 기존 팀 프로젝트 기반 개인 PoC (ginu 단독 수행)
+- 프로젝트 성격: 기존 팀 프로젝트 기반 개인 PoC (단독 수행)
 - 목적: 기존 Spring Boot 서비스를 Kubernetes에 배포하고 배포·관측·장애 복구·CPU 기반 HPA 동작을 실험으로 확인
 - 서비스 기반: 인증, 해수욕장 조회, 상태 정보 조회, 즐겨찾기, 예약, 알림
 - PoC 주요 기술: Terraform, AWS EC2, kubeadm, Cilium, AWS Systems Manager(SSM), Prometheus/Grafana, Metrics Server, k6
-- 운영 방식: 검증할 때 AWS 클러스터를 생성하고 결과 회수 후 삭제하는 단기 PoC
+- 운영 방식: 검증할 때 AWS 클러스터를 생성하고 결과 회수 후 삭제하는 PoC
 
 ## PoC 구성과 검토 범위
 
@@ -231,16 +231,6 @@ npm run dev
 - 트러블슈팅 문서: [docs/troubleshooting/docs-README.md](https://github.com/Beach-complex/docs/blob/main/troubleshooting/docs-README.md)
 - 프론트엔드 레포: [Beach-complex/frontend](https://github.com/Beach-complex/frontend)
 - 프론트엔드 가이드: [docs/guides/backend-developer-frontend-guide.md](https://github.com/Beach-complex/docs/blob/main/guides/backend-developer-frontend-guide.md)
-
-## 원본 서비스 개발팀
-
-아래는 원본 팀 프로젝트의 개발팀입니다. 이 저장소의 Kubernetes PoC 구성과 실험은 ginu가 단독으로 수행했습니다.
-
-| 역할 | 이름 | GitHub |
-| --- | --- | --- |
-| Backend / Infra | 박재홍 | [@PHJ2000](https://github.com/PHJ2000) |
-| Backend | 박건우 | [@GunwooPar](https://github.com/GunwooPar) |
-| Frontend / PM | 정도경 | [@DoGyeong888](https://github.com/DoGyeong888) |
 
 ## 라이선스
 
