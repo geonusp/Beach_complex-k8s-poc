@@ -65,3 +65,4 @@ front/public/firebase-config.js
 *.iml
 /bin/
 /Beach-architecture-k8s-poc-*/
+/tempdocs/
