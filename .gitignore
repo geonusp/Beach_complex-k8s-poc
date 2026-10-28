@@ -64,3 +64,4 @@ front/public/firebase-config.js
 .vscode/
 *.iml
 /bin/
+/Beach-architecture-k8s-poc-*/
