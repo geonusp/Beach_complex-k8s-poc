@@ -110,8 +110,8 @@ SSM Run Command 한 번으로 다음을 출력한다. Prometheus는 API server s
 - Prometheus active target(`job`, `health`, `scrapeUrl`, `lastError`)
 - `promql-queries.tsv`의 쿼리별 결과
 
-target이 하나라도 `up`이 아니거나 target이 없거나, 쿼리 결과가 비었거나 `NaN`이면 실패한다.
-검증이 트래픽을 직접 보내므로 HTTP 지표가 `NaN`이면 트래픽 부족이 아니라 수집 경로 문제다.
+target이 하나라도 `up`이 아니거나 target이 없거나, 쿼리 결과가 비었으면 실패한다.
+`NaN`도 원칙적으로 실패하지만, 전체 `http_request_rate`가 0일 때의 `http_5xx_ratio`·`http_p95_seconds`만 측정 불가 WARNING으로 기록하고 진행한다. 원본 `NaN`을 0으로 바꾸지 않으며, 이 분기의 통과를 오류율 0·지연시간 측정 성공으로 해석하지 않는다. 요청률이 양수인 경우와 다른 지표의 `NaN`은 실패한다.
 
 ## 부하를 준 상태에서 지표 확인
 

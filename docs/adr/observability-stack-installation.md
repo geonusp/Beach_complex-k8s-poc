@@ -126,7 +126,7 @@ Proposed — `kube-prometheus-stack` Helm 차트를 축소 구성으로 사용�
 
 - [k6 부하 생성기 실행 위치](./load-generator-placement.md)
 - [Ephemeral 의존성 배치](./ephemeral-dependency-placement.md)
-- [이슈 #5 구현 문서](../../tempdocs/issue-5/README.md)
+- 이슈 #5 구현 문서 (로컬 참고·Git 미포함: `../../tempdocs/issue-5/README.md`)
 
 ## 작성일자
 

@@ -33,13 +33,13 @@ Proposed — 구현 PR에서 Terraform 구성과 SSM 결과 회수를 검증한 
 현재 실험 스크립트의 관리 대상 EC2는 Control Plane 인스턴스다. 다만 결과 저장은 Control Plane의 별도 업로드 작업이 아니라 SSM Run Command 출력 기능이 수행한다. GitHub Actions는 아직 연결되어 있지 않으며, 연결하더라도 호출·회수 주체만 바뀐다. **선택지 4는 이 흐름과 다른 향후 구조**로, k6 Job이 S3에 직접 업로드한다.
 
 - **권한 주체:** 로컬 PC/CI 실행 주체는 SSM 명령 실행과 결과 객체 다운로드 권한을 가진다. S3에 명령 출력을 쓰는 권한은 명령 대상 EC2의 인스턴스 프로파일 역할이 제공한다. 이 흐름에서 k6 Pod가 S3에 직접 업로드하지 않는다.
-- Terraform은 버킷, Block Public Access, 서버 측 암호화, Control Plane 인스턴스 역할의 prefix 한정 업로드 권한을 관리한다.
+- Terraform은 버킷, Block Public Access, 서버 측 암호화, 노드 공유 역할의 prefix 한정 업로드 권한을 관리한다. 현재 호출 대상은 Control Plane이지만 IAM 역할은 네 노드가 공유하므로 권한이 Control Plane에만 격리된 구성은 아니다.
 - `run-rollout-experiment.sh`는 `--output-s3-bucket-name`과 실행별 prefix를 지정한다. 원격 스크립트는 k6 원본 JSON을 마커로 둘러 stdout에 기록한다.
 - 로컬 스크립트는 S3에 저장된 전체 stdout을 결과 디렉터리로 회수하고 요약과 원본 JSON을 분리 저장한다.
 - 실험 스크립트는 기존처럼 Control Plane을 SSM Run Command 대상으로 사용한다. SSM Agent가 명령 출력(stdout/stderr)을 S3에 저장하며, Control Plane의 별도 AWS CLI 업로드 단계는 두지 않는다.
 - 향후 k6 실행을 Kubernetes Job으로 정착시키고 파일 단위 결과 업로드가 필요해지면, k6 Job이 결과물을 S3에 직접 업로드하는 구조를 별도로 검토한다. 이는 오토스케일러 도입만으로 자동 결정하지 않으며, Job에 부여할 최소 권한 AWS 자격 증명 방식도 함께 설계한다.
 - 이 버킷은 장기 아카이브가 아니다. 결과 파일은 `terraform destroy` 전에 로컬로 회수하며, destroy 시 버킷과 S3 객체도 함께 삭제한다.
-- 결과 보존본은 실험 후 PR의 추적 가능한 문서/결과 디렉터리에 저장한다. S3만을 유일한 보존 위치로 삼지 않는다.
+- 결과는 destroy 전에 로컬로 회수하며 S3만을 유일한 보존 위치로 삼지 않는다. #3·#5의 일부 증거는 Git에도 보존하지만 #4·#6의 전체 원본은 로컬 보관으로 외부 접근이 제한된다. [실험 결과 종합](../experiments/issue-8/README.md)의 회차별 접근성을 따른다.
 
 ### 범위 제외
 
@@ -125,8 +125,8 @@ Proposed — 구현 PR에서 Terraform 구성과 SSM 결과 회수를 검증한 
 
 ### 관련 문서
 
-- [이슈 #3 구현 문서](../../tempdocs/issue-3/README.md)
-- [PR 3 구현 문서](../../tempdocs/issue-3/pr-3-ssm-s3-result-storage.md)
+- 이슈 #3 구현 문서 (로컬 참고·Git 미포함: `../../tempdocs/issue-3/README.md`)
+- PR 3 구현 문서 (로컬 참고·Git 미포함: `../../tempdocs/issue-3/pr-3-ssm-s3-result-storage.md`)
 
 ## 작성일자
 

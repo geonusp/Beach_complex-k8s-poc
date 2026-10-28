@@ -3,6 +3,8 @@
 AWS EC2 4노드 kubeadm 클러스터를 만들고 내리는 운영 문서다.
 **상시 운영하지 않는다.** 검증할 때만 만들고 끝나면 완전히 삭제한다.
 
+아래 인스턴스 유형·서브넷은 `terraform.tfvars.example`의 예시다. 실제 배포값은 운영자의 `terraform.tfvars`와 Terraform 출력으로 확인한다.
+
 | 노드 | 역할 | 인스턴스 | 서브넷 |
 | --- | --- | --- | --- |
 | `cp-1` | control-plane | t3.medium | public-a (us-east-1a) |
@@ -22,6 +24,7 @@ AWS EC2 4노드 kubeadm 클러스터를 만들고 내리는 운영 문서다.
 | AWS CLI v2 | SSM 명령 실행 | `aws sts get-caller-identity` |
 | `base64` | 원격 스크립트 전송 | coreutils에 포함 |
 | `python3` | 노드 목록 파싱 | `python3 --version` |
+| Kustomize (선택) | 아래 수동 이미지 태그 변경 시에만 필요 | `kustomize version` |
 
 `kubectl`과 `helm`은 로컬에 없어도 된다. 모든 클러스터 조작은 SSM으로 control plane에서 실행한다.
 
@@ -72,12 +75,16 @@ aws ssm get-parameters --region us-east-1 \
 
 ### 2-0. 원클릭 생성 및 배포
 
-Terraform 인프라 생성부터 kubeadm·Cilium·GHCR 인증·PostgreSQL·Redis·Beach 배포까지
+Terraform 인프라 생성부터 kubeadm·Cilium·Metrics Server·GHCR 인증·PostgreSQL·Redis·Beach·관측 스택 배포까지
 의존성 순서대로 실행하려면 저장소 루트에서 다음 스크립트를 사용한다.
 
 ```bash
 bash deploy/k8s/scripts/provision-and-deploy.sh
 ```
+
+실행 전 `GHCR_USERNAME`을 GHCR 패키지 접근 계정으로 지정하고, 지정한 SSM SecureString에 토큰을 준비한다. `sync-ghcr-secret.sh`는 이 계정을 필수로 요구한다. [인증 준비 절차](../../docs/kubernetes-ephemeral-cluster-cost-and-secrets.md)를 따른다.
+
+`deploy-beach.sh`는 검증용 `beach-runtime` Secret을 생성·갱신하며 실행마다 JWT secret을 새로 만든다. 기존 세션 토큰에 영향을 줄 수 있으므로 운영용 재배포 절차로 사용하지 않는다.
 
 이 스크립트는 다음 단계를 순차 실행한다.
 
@@ -86,6 +93,7 @@ bash deploy/k8s/scripts/provision-and-deploy.sh
 3. `sync-ghcr-secret.sh`
 4. `deploy-dependencies.sh`
 5. `deploy-beach.sh`
+6. `install-observability.sh`
 
 단계별 동작을 직접 확인해야 하거나 중간 단계만 재실행할 때는 아래 수동 절차를 사용한다.
 
@@ -118,7 +126,7 @@ cd ../../../../..          # 저장소 루트
 bash deploy/k8s/scripts/bootstrap-cluster.sh
 ```
 
-네 단계를 순서대로 실행한다. 각 단계는 **멱등**이라 중간에 실패하면 같은 명령을 다시 돌리면 된다.
+여섯 단계를 순서대로 실행한다. 중간에 실패하면 아래 재실행 절차와 각 스크립트의 검증 결과를 확인한다.
 
 | 단계 | 스크립트 | 하는 일 |
 | --- | --- | --- |
@@ -126,6 +134,8 @@ bash deploy/k8s/scripts/bootstrap-cluster.sh
 | 2 | `join-workers.sh` | 토큰 발급 후 워커 3대 join |
 | 3 | `install-cilium.sh` | Helm으로 Cilium 설치 |
 | 4 | `label-nodes.sh` | 노드 역할 라벨 부여 |
+| 5 | `approve-kubelet-serving-csrs.sh` | kubelet-serving CSR 확인 및 승인 |
+| 6 | `install-metrics-server.sh` | Metrics Server 설치 |
 
 개별 실행도 가능하다.
 
@@ -135,7 +145,7 @@ bash deploy/k8s/scripts/label-nodes.sh      # 라벨만 다시
 ```
 
 실패한 단계만 다시 실행할 수 있다. `bootstrap-cluster.sh`를 다시 실행하면 이미 초기화된
-Control Plane과 join 완료 Worker는 건너뛰고 Cilium·라벨·최종 검증을 재수행한다.
+Control Plane과 join 완료 Worker는 건너뛰고 Cilium·라벨·kubelet-serving CSR 승인·Metrics Server·최종 검증을 재수행한다.
 
 ---
 
@@ -157,7 +167,7 @@ beach-complex-cp-1     Ready    control-plane    ...   v1.36.x
 beach-complex-obs-1    Ready    observability    ...   v1.36.x
 ```
 
-**4대 전부 Ready, ROLES가 네 역할로 구분**되면 이슈 #1의 완료 기준을 만족한다.
+**4대 전부 Ready, ROLES가 control-plane·app·observability 세 역할로 구분**되면 이슈 #1의 완료 기준을 만족한다.
 
 추가 확인이다.
 
@@ -187,7 +197,7 @@ Kustomize 매니페스트를 적용한다.
 kubectl apply -f deploy/k8s/app/namespace.yaml
 kubectl apply -f deploy/k8s/app/secret.yaml
 kubectl -n beach create secret docker-registry ghcr-pull --docker-server=ghcr.io --docker-username="$GHCR_USERNAME" --docker-password="$GHCR_TOKEN" --dry-run=client -o yaml | kubectl apply -f -
-kustomize edit set image beach-backend=ghcr.io/geonusp/beach_complex-k8s-poc-backend:<IMAGE_SHA>
+(cd deploy/k8s/app && kustomize edit set image beach-backend=ghcr.io/geonusp/beach_complex-k8s-poc-backend:<IMAGE_SHA>)
 kubectl apply -k deploy/k8s/app
 BEACH_URL=https://beach.example.com BEACH_EXTERNAL_PATH=/api/beaches bash deploy/k8s/scripts/verify-beach.sh
 ```
@@ -248,7 +258,7 @@ control plane의 `/etc/kubernetes/admin.conf`를 받아 `server:`를 `https://12
 원클릭 생성 스크립트의 삭제 경로는 Terraform 확인 프롬프트를 유지한다.
 
 ```bash
-cd ../../..          # 저장소 루트
+# 저장소 루트에서 실행한다.
 bash deploy/k8s/scripts/provision-and-deploy.sh --destroy
 ```
 
@@ -276,7 +286,8 @@ aws ec2 describe-instances --region us-east-1 \
 
 ## 6. 비용
 
-`us-east-1` 기준 시간당 EC2는 `t3.medium × 2 + t3.small × 2 = $0.1248`이다.
+아래는 초기 비용 문서(2026-09-04)에서 사용한 예산 추정이며 현재 요금 견적이 아니다.
+당시 `us-east-1` 기준 시간당 EC2 추정은 `t3.medium × 2 + t3.small × 2 = $0.1248`이었다.
 퍼블릭 IPv4 4개와 gp3 120 GiB가 더해진다.
 
 | 실행 시간 | 대략 비용 |
@@ -284,8 +295,8 @@ aws ec2 describe-instances --region us-east-1 \
 | 40시간 (권장 사용량) | 약 `$6` |
 | 한 달 상시 | 약 `$172` |
 
-**비용 위험은 단가가 아니라 삭제 누락에 있다.** 검증이 끝나면 바로 `destroy` 한다.
-실험 중에는 기존 앱 EC2와 관측 EC2를 포함해 **총 6대**가 동시에 떠 있다.
+배포 전 [EC2](https://aws.amazon.com/ec2/pricing/on-demand/)·[EBS](https://aws.amazon.com/ebs/pricing/)·[VPC](https://aws.amazon.com/vpc/pricing/) 공식 요금으로 실제 실행 시간·리소스 견적을 다시 확인한다. 원본 결과 회수·복구 확인 후 `destroy` 한다.
+기존 앱 EC2와 관측 EC2를 함께 유지하면 실험 중 총 6대가 될 수 있다. 기존 인스턴스의 현재 실행 상태는 별도로 확인한다.
 
 ---
 
@@ -293,7 +304,7 @@ aws ec2 describe-instances --region us-east-1 \
 
 | 한계 | 내용 | 영향 |
 | --- | --- | --- |
-| **단일 Control Plane** | etcd가 한 대에만 있다. CP 노드가 죽으면 클러스터 전체가 정지하고 복구 수단이 없다. etcd 스냅샷도 받지 않는다 | 장애 복구 실험은 App Worker와 Pod로 한정한다 |
+| **단일 Control Plane** | CP 장애 시 API·스케줄링·제어 기능을 사용할 수 없고 etcd 스냅샷 기반 복구 절차가 없다. 기존 앱의 요청 영향은 실측하지 않았다 | 장애 복구 실험은 App Worker와 Pod로 한정한다 |
 | **로컬 Terraform state** | backend 블록이 없어 state가 작업자 PC에만 있다. 유실되면 리소스가 고아가 된다 | `Component=kubernetes` 태그로 수동 정리 가능 |
 | **join 토큰 24시간 만료** | 재생성 시 항상 새로 발급해야 한다 | 스크립트가 매번 발급하므로 수동 개입은 없다 |
 | **T 계열 CPU 크레딧** | 부하 테스트 중 크레딧이 소진되면 성능이 떨어져 측정이 왜곡된다 | 이슈 #4에서 `unlimited` 또는 m 계열 전환 검토 |
@@ -303,7 +314,7 @@ aws ec2 describe-instances --region us-east-1 \
 
 | 구성요소 | 버전 | 근거 |
 | --- | --- | --- |
-| Kubernetes | `v1.36` | Cilium v1.20.2가 e2e 테스트하는 최신 버전이다. stable은 v1.37이지만 Cilium 호환성 목록에 없다 |
+| Kubernetes | `v1.36` | Terraform 예시의 고정 버전. 업그레이드 전 해당 Cilium 버전의 호환성 표를 재확인한다 |
 | Cilium | `1.20.2` | `install-cilium.sh`의 `CILIUM_VERSION`으로 변경 가능 |
 
 버전을 올릴 때는 [Cilium 시스템 요구사항](https://docs.cilium.io/en/stable/operations/system_requirements/)의

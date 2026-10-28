@@ -268,7 +268,7 @@ bash deploy/k8s/scripts/run-rollout-experiment.sh ghcr.io/geonusp/beach_complex-
 ### 아직 확인되지 않은 것과 별도 실험
 
 - 이전 실행에서 `kubectl logs`, `awk`, SSM Agent 중 어느 내부 단계가 가장 오래 걸렸는지. `ps`와 S3 출력 크기만으로 교착 상태를 증명할 수 없다.
-- 기본 설정과 조정 설정을 동일 조건에서 비교하는 실험 및 readiness 실패 시 endpoint 제외 실험. 이번 smoke 결과를 그 비교 결과로 대체하지 않는다.
+- 기본·조정 설정의 동일 조건 비교는 현재 #3 범위에서 제외한다. readiness 실패 시 endpoint 제외·재포함은 이후 [별도 Redis 장애 회차](../experiments/issue-3/readiness-endpoint/README.md)에서 확인했으며 이번 smoke 결과와 구분한다.
 
 성공한 단일 회차의 상세 수치와 원본 파일은 [이슈 #3 실험 결과](../experiments/issue-3/README.md)에 보존했다.
 
@@ -286,7 +286,8 @@ bash deploy/k8s/scripts/run-rollout-experiment.sh ghcr.io/geonusp/beach_complex-
 
 ### 남은 작업
 
-- [ ] 동일 조건의 기본·조정 설정 비교와 readiness 실패 시 endpoint 제외 실험 수행
+- [x] 별도 Redis 장애 회차의 readiness endpoint 제외·재포함 근거 연결. 요청 실패율은 미측정
+- [ ] 기본·조정 설정 비교는 현재 범위 제외이며, 다시 수행할 경우 별도 회차로 기록
 - [ ] 정상 요청률에서도 결과 회수가 지연된다면 `kubectl logs`·SSM/S3 구간별 소요 시간 측정
 
 ---

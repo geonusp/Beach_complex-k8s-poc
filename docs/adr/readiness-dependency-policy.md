@@ -4,6 +4,15 @@
 
 Proposed — 논의 중. 이슈 #3 PR 2 착수 전에 확정한다.
 
+## 현재 구현과 제안의 차이 (#8 문서 검토)
+
+아래 본문은 2026-10-07의 제안 기록이며 현재 구현된 기본 정책과 다르다. 이 검토로 ADR의 승인 상태를 변경하지 않는다.
+
+- 현재 [`application.yml`](../../src/main/resources/application.yml)의 readiness 그룹은 `readinessState,redis`다. [`ConfigMap`](../../deploy/k8s/app/configmap.yaml)에는 이를 제외하는 재정의가 없다.
+- 따라서 기본 readiness에서 Redis를 제외하고 실험 중에만 환경변수로 포함한다는 아래 제안은 현재 구현으로 채택되지 않았다. 해당 환경변수 적용·제거 절차를 현재 실험의 필수 단계로 사용하지 않는다.
+- [Redis 장애 실측](../experiments/issue-3/readiness-endpoint/README.md)은 ready endpoint 2→0→2를 관찰했다. 요청 실패율은 미측정이므로 아래의 “전체 서비스 중단”·“모든 요청이 실패” 표현을 실측 결과로 인용하지 않는다.
+- 현재 정책의 적절성이나 Redis 제외로의 변경은 별도 결정이 필요하다. #8 문서 검토에서는 애플리케이션 설정을 변경하지 않는다.
+
 ## 컨텍스트
 
 이슈 #3의 작업 중 하나는 "readiness 실패 Pod가 Service endpoint에서 제외되는지 확인"이다.
@@ -126,7 +135,7 @@ readiness에 외부 의존성을 넣으면, 그 의존성의 장애가 모든 Po
 ### 관련 문서
 
 - [Ephemeral 의존성 배치](./ephemeral-dependency-placement.md)
-- [이슈 #3 구현 문서](../../tempdocs/issue-3/README.md)
+- 이슈 #3 구현 문서 (로컬 참고·Git 미포함: `../../tempdocs/issue-3/README.md`)
 
 ## 작성일자
 

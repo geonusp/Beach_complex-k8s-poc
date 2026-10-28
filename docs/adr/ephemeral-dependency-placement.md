@@ -29,7 +29,7 @@ PoC용 PostgreSQL과 Redis를 **Kubernetes 클러스터의 `beach` Namespace 안
 - PostgreSQL: `Deployment` + `ClusterIP Service` 이름 `postgres`
 - Redis: `Deployment` + `ClusterIP Service` 이름 `redis`
 - Beach 앱은 각각 `postgres:5432`, `redis:6379`로 접근한다.
-- 두 의존성은 서로 다른 App Worker에 분산되도록 Pod anti-affinity를 사용한다.
+- 두 의존성은 서로 다른 App Worker 배치를 선호하는 `preferredDuringSchedulingIgnoredDuringExecution` Pod anti-affinity를 사용한다. 서로 다른 노드 배치를 보장하지 않으며 Node 장애 시 재배치·복구 동작은 미검증이다.
 - Control Plane에는 워크로드를 배치하지 않는다.
 - `obs-1`은 관측 워크로드 전용으로 유지한다.
 - 영속 볼륨은 사용하지 않는다. 클러스터 재생성·리소스 삭제 시 데이터도 사라지는 검증 전용 구성이다.
