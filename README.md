@@ -60,16 +60,6 @@ AWS 권한, 기존 VPC·서브넷, Terraform 변수, GHCR 인증과 runtime Secr
 - [관측 스택 설치·지표 해석](./deploy/k8s/observability/README.md)
 - [실험별 결과·근거 접근성·#8 완료 기준 대응](./docs/experiments/issue-8/README.md)
 
-## 문서
-
-- 원본 서비스 문서 홈: [Beach-complex/docs](https://github.com/Beach-complex/docs)
-- PoC 설계 기록: [`docs/adr/README.md`](./docs/adr/README.md)
-- 원본 서비스 SSOT: [docs/ssot.md](https://github.com/Beach-complex/docs/blob/main/ssot.md)
-- ADR: [docs/adr](https://github.com/Beach-complex/docs/tree/main/adr)
-- 트러블슈팅 문서: [docs/troubleshooting/docs-README.md](https://github.com/Beach-complex/docs/blob/main/troubleshooting/docs-README.md)
-- 프론트엔드 레포: [Beach-complex/frontend](https://github.com/Beach-complex/frontend)
-- 프론트엔드 가이드: [docs/guides/backend-developer-frontend-guide.md](https://github.com/Beach-complex/docs/blob/main/guides/backend-developer-frontend-guide.md)
-
 ## 라이선스
 
 이 프로젝트는 [MIT](./LICENSE) 라이선스를 따릅니다.
