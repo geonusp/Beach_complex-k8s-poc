@@ -602,13 +602,39 @@ test_beach_deployment_creates_runtime_secret_and_rolls_out() {
   cat > "$bin_dir/kubectl" <<'EOF'
 #!/usr/bin/env bash
 printf '%s\n' "$*" >> "$KUBECTL_LOG"
+case "$*" in
+  *'rollout status'*) [[ "$SCENARIO" != rollout ]] ;;
+  *'get deployment/'*'readyReplicas'*) printf '2' ;;
+  *'get deployment/'*'revision'*) printf '7' ;;
+  *'get replicasets'*)
+    [[ "$*" == *"revision=='7'"* ]] || exit 1
+    [[ "$SCENARIO" == missing ]] || printf 'current-hash' ;;
+  *'get pods'*'custom-columns'*)
+    if [[ "$SCENARIO" == skew && "$*" == *'pod-template-hash=current-hash'* ]]; then
+      printf 'app-1\napp-1\n'
+    else
+      printf 'app-1\napp-2\n'
+    fi ;;
+  *'get endpoints'*) printf '10.244.1.1 10.244.2.1' ;;
+esac
 EOF
   chmod +x "$bin_dir/kubectl"
 
   PATH="$bin_dir:$PATH" AWS_PARAMETERS_FILE="$parameters_file" \
     bash "$script_dir/deploy-beach.sh" >/dev/null
   decode_remote_script "$parameters_file" "$remote_script"
-  PATH="$bin_dir:$PATH" KUBECTL_LOG="$kubectl_log" bash "$remote_script"
+  local scenario status output="$test_dir/beach-output"
+  for scenario in skew missing rollout normal; do
+    status=0
+    PATH="$bin_dir:$PATH" KUBECTL_LOG="$kubectl_log" SCENARIO="$scenario" \
+      bash "$remote_script" > "$output" 2>&1 || status=$?
+    if [[ "$scenario" == normal ]]; then
+      [[ "$status" == 0 ]] || fail "normal placement failed: $(cat "$output")"
+      grep -Fq 'Beach deployment verification completed' "$output" || fail 'existing verifier was not run'
+    else
+      [[ "$status" != 0 ]] || fail "$scenario placement failure was ignored"
+    fi
+  done
 
   grep -Fq -- 'create secret generic beach-runtime --namespace beach' "$kubectl_log" \
     || fail 'Beach runtime Secret was not generated'

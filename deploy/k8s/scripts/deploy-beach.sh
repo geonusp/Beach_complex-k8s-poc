@@ -10,8 +10,10 @@ main() {
   [[ "$deploy_timeout_seconds" =~ ^[1-9][0-9]*$ ]] \
     || fail 'BEACH_DEPLOY_TIMEOUT_SECONDS must be a positive integer'
 
+  local encoded_verifier
   local control_plane_id manifest_dir encoded_kustomization encoded_namespace encoded_configmap encoded_deployment encoded_service encoded_ingress
   control_plane_id="$(terraform_output control_plane_instance_id)"
+  encoded_verifier="$(base64 -w0 "$repo_root/deploy/k8s/scripts/verify-beach.sh")"
   manifest_dir="/tmp/beach-app"
   encoded_kustomization="$(base64 -w0 "$repo_root/deploy/k8s/app/kustomization.yaml")"
   encoded_namespace="$(base64 -w0 "$repo_root/deploy/k8s/app/namespace.yaml")"
@@ -43,7 +45,8 @@ kubectl create secret generic beach-runtime \\
   --dry-run=client -o yaml | kubectl apply -f -
 kubectl apply -k '$manifest_dir'
 kubectl -n beach rollout restart deployment/beach
-kubectl -n beach rollout status deployment/beach --timeout='${deploy_timeout_seconds}s'
+echo '$encoded_verifier' | base64 -d > '$manifest_dir/verify-beach.sh'
+BEACH_DEPLOY_TIMEOUT_SECONDS='$deploy_timeout_seconds' bash '$manifest_dir/verify-beach.sh'
 kubectl -n beach get pods -o wide
 unset jwt_secret
 "

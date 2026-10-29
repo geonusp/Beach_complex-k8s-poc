@@ -23,14 +23,18 @@ main() {
   require_tools
 
   log "waiting for deployment/$deployment"
-  kubectl -n "$namespace" rollout status "deployment/$deployment" --timeout=300s
+  kubectl -n "$namespace" rollout status "deployment/$deployment" --timeout="${BEACH_DEPLOY_TIMEOUT_SECONDS:-300}s"
 
   local ready_replicas
   ready_replicas="$(kubectl -n "$namespace" get "deployment/$deployment" -o jsonpath='{.status.readyReplicas}')"
   [[ "$ready_replicas" == "2" ]] || fail "expected 2 ready replicas, found ${ready_replicas:-0}"
 
-  local distinct_nodes
-  distinct_nodes="$(kubectl -n "$namespace" get pods -l "$selector" \
+  local revision hash_value distinct_nodes
+  revision="$(kubectl -n "$namespace" get "deployment/$deployment" -o jsonpath='{.metadata.annotations.deployment\.kubernetes\.io/revision}')"
+  hash_value="$(kubectl -n "$namespace" get replicasets -l "$selector" \
+    -o "jsonpath={.items[?(@.metadata.annotations.deployment\\.kubernetes\\.io/revision=='$revision')].metadata.labels.pod-template-hash}")"
+  [[ -n "$hash_value" && "$hash_value" != *[[:space:]]* ]] || fail 'expected one latest ReplicaSet hash'
+  distinct_nodes="$(kubectl -n "$namespace" get pods -l "$selector,pod-template-hash=$hash_value" \
     -o custom-columns='NODE:.spec.nodeName' --no-headers | awk 'NF { print $1 }' | sort -u | wc -l | tr -d ' ')"
   [[ "$distinct_nodes" == "2" ]] || fail "expected replicas on 2 distinct nodes, found $distinct_nodes"
 
