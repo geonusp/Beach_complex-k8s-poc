@@ -572,6 +572,15 @@ test_dependencies_are_applied_on_the_control_plane() {
 #!/usr/bin/env bash
 printf '%s\n' "$*" >> "$KUBECTL_LOG"
 case "$*" in
+  'apply -k /tmp/beach-dependencies')
+    pg_revision="$(awk '/dependency-revision:/ {print $2}' /tmp/beach-dependencies/postgres.yaml)"
+    redis_revision="$(awk '/dependency-revision:/ {print $2}' /tmp/beach-dependencies/redis.yaml)"
+    [[ -n "$pg_revision" && "$pg_revision" != initial && "$pg_revision" == "$redis_revision" ]] \
+      || { echo 'dependencies do not share a fresh rollout revision' >&2; exit 1; }
+    printf '%s\n' "$pg_revision" >> "$KUBECTL_LOG.revision";;
+  *'get pods '*'-o name'*)
+    if [[ "${DEPENDENCY_SCENARIO:-healthy}" == termination_error ]]; then echo pod/postgres-old; fi;;
+  *'wait --for=delete'*) exit 1;;
   *'get deployment/'*'readyReplicas'*) echo '1 1';;
   *'get deployment/'*'revision'*) echo 2;;
   *'get replicasets'*) echo latest;;
@@ -598,9 +607,17 @@ EOF
     || fail 'PostgreSQL rollout was not verified'
   grep -Fxq -- '-n beach rollout status deployment/redis --timeout=300s' "$kubectl_log" \
     || fail 'Redis rollout was not verified'
+  local first_revision
+  first_revision="$(cat "$kubectl_log.revision")"
+  PATH="$bin_dir:$PATH" AWS_PARAMETERS_FILE="$parameters_file" \
+    bash "$script_dir/deploy-dependencies.sh" >/dev/null
+  decode_remote_script "$parameters_file" "$remote_script"
+  PATH="$bin_dir:$PATH" KUBECTL_LOG="$test_dir/dependency-redeploy.log" bash "$remote_script"
+  [[ "$(cat "$test_dir/dependency-redeploy.log.revision")" != "$first_revision" ]] \
+    || fail 'dependency redeployment reused an old rollout revision'
   local scenario
-  for scenario in colocated query_error; do
-    if PATH="$bin_dir:$PATH" KUBECTL_LOG="$kubectl_log" DEPENDENCY_SCENARIO="$scenario" \
+  for scenario in colocated query_error termination_error; do
+    if PATH="$bin_dir:$PATH" KUBECTL_LOG="$test_dir/$scenario.log" DEPENDENCY_SCENARIO="$scenario" \
       bash "$remote_script" >"$test_dir/dependency-$scenario.log" 2>&1; then
       fail "dependency verification accepted $scenario"
     fi

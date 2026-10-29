@@ -22,7 +22,10 @@ def cluster():
         spread = dict(maxSkew=1, topologyKey="kubernetes.io/hostname", whenUnsatisfiable="DoNotSchedule", nodeTaintsPolicy="Honor")
         if deployment["metadata"]["name"] != "beach":
             spread["labelSelector"] = dict(matchExpressions=[dict(key="app.kubernetes.io/name", operator="In", values=["postgres", "redis"])])
+            spread["matchLabelKeys"] = ["dependency-revision"]
         deployment["spec"]["template"] = dict(spec=dict(topologySpreadConstraints=[spread]))
+        if deployment["metadata"]["name"] != "beach":
+            deployment["spec"]["template"]["metadata"] = dict(labels={"dependency-revision": "run-1"})
     for i, node in enumerate(p for p in data["items"] if p["kind"] == "Node"):
         node["status"].update(addresses=[dict(type="InternalIP", address=f"10.0.0.{i+1}")], allocatable=dict(cpu="2", memory="1800Mi", pods="20"))
     for name, node in [("postgres", "app-1"), ("redis", "app-2")]:
@@ -46,6 +49,17 @@ def recovered(data):
 
 
 class NodeTests(unittest.TestCase):
+    def test_preflight_requires_matching_nonempty_dependency_revisions(self):
+        for revision in ["", "run-2", None]:
+            data = cluster()
+            labels = data["items"][2]["spec"]["template"]["metadata"]["labels"]
+            if revision is None:
+                labels.pop("dependency-revision")
+            else:
+                labels["dependency-revision"] = revision
+            with self.subTest(revision=revision), self.assertRaisesRegex(ValueError, "dependency revision"):
+                n.preflight(data, context())
+
     def test_preflight_requires_joint_dependency_spread_and_single_node_recovery(self):
         n.preflight(cluster(), context())
         for name in ["postgres", "redis"]:
