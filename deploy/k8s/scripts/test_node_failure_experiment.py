@@ -19,7 +19,10 @@ def context():
 def cluster():
     data = fixtures.fixture()
     for deployment in data["items"][:3]:
-        deployment["spec"]["template"] = dict(spec=dict(topologySpreadConstraints=[dict(nodeTaintsPolicy="Honor")], affinity=dict(podAntiAffinity=dict(preferredDuringSchedulingIgnoredDuringExecution=[dict(weight=100)]))))
+        spread = dict(maxSkew=1, topologyKey="kubernetes.io/hostname", whenUnsatisfiable="DoNotSchedule", nodeTaintsPolicy="Honor")
+        if deployment["metadata"]["name"] != "beach":
+            spread["labelSelector"] = dict(matchExpressions=[dict(key="app.kubernetes.io/name", operator="In", values=["postgres", "redis"])])
+        deployment["spec"]["template"] = dict(spec=dict(topologySpreadConstraints=[spread]))
     for i, node in enumerate(p for p in data["items"] if p["kind"] == "Node"):
         node["status"].update(addresses=[dict(type="InternalIP", address=f"10.0.0.{i+1}")], allocatable=dict(cpu="2", memory="1800Mi", pods="20"))
     for name, node in [("postgres", "app-1"), ("redis", "app-2")]:
@@ -43,6 +46,20 @@ def recovered(data):
 
 
 class NodeTests(unittest.TestCase):
+    def test_preflight_requires_joint_dependency_spread_and_single_node_recovery(self):
+        n.preflight(cluster(), context())
+        for name in ["postgres", "redis"]:
+            for change in [dict(nodeTaintsPolicy="Ignore"), dict(minDomains=2), dict(maxSkew=2),
+                           dict(whenUnsatisfiable="ScheduleAnyway"), dict(topologyKey="topology.kubernetes.io/zone"),
+                           dict(matchLabelKeys=["pod-template-hash"]),
+                           dict(labelSelector=dict(matchLabels={"app.kubernetes.io/name": name}))]:
+                with self.subTest(name=name, change=change):
+                    data = cluster()
+                    deployment = next(d for d in data["items"] if d["kind"] == "Deployment" and d["metadata"]["name"] == name)
+                    deployment["spec"]["template"]["spec"]["topologySpreadConstraints"][0].update(change)
+                    with self.assertRaisesRegex(ValueError, "dependency topology spread"):
+                        n.preflight(data, context())
+
     def test_target_must_match_terraform_app_role_and_unique_identity(self):
         tf = dict(ids={"cp-1": "i-cp", "app-1": "i-app1", "app-2": "i-app2", "obs-1": "i-obs"},
                   roles={"cp-1": "control-plane", "app-1": "app", "app-2": "app", "obs-1": "observability"},

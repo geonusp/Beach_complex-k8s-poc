@@ -571,6 +571,19 @@ test_dependencies_are_applied_on_the_control_plane() {
   cat > "$bin_dir/kubectl" <<'EOF'
 #!/usr/bin/env bash
 printf '%s\n' "$*" >> "$KUBECTL_LOG"
+case "$*" in
+  *'get deployment/'*'readyReplicas'*) echo '1 1';;
+  *'get deployment/'*'revision'*) echo 2;;
+  *'get replicasets'*) echo latest;;
+  *'get pods -l app.kubernetes.io/name=postgres,'*) echo app-1;;
+  *'get pods -l app.kubernetes.io/name=redis,'*)
+    case "${DEPENDENCY_SCENARIO:-healthy}" in
+      colocated) echo app-1;;
+      query_error) exit 1;;
+      *) echo app-2;;
+    esac;;
+  *'get node '*) echo app;;
+esac
 EOF
   chmod +x "$bin_dir/kubectl"
 
@@ -585,6 +598,15 @@ EOF
     || fail 'PostgreSQL rollout was not verified'
   grep -Fxq -- '-n beach rollout status deployment/redis --timeout=300s' "$kubectl_log" \
     || fail 'Redis rollout was not verified'
+  local scenario
+  for scenario in colocated query_error; do
+    if PATH="$bin_dir:$PATH" KUBECTL_LOG="$kubectl_log" DEPENDENCY_SCENARIO="$scenario" \
+      bash "$remote_script" >"$test_dir/dependency-$scenario.log" 2>&1; then
+      fail "dependency verification accepted $scenario"
+    fi
+  done
+  grep -Fq 'dependencies must be on distinct app workers' "$test_dir/dependency-colocated.log" \
+    || fail 'dependency placement failure was not reported'
 }
 
 test_beach_deployment_creates_runtime_secret_and_rolls_out() {

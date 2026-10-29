@@ -32,9 +32,14 @@ def preflight(data, ctx):
     if not any(s.get("nodeTaintsPolicy") == "Honor" for s in spread):
         raise ValueError("Apply Beach nodeTaintsPolicy Honor before injecting")
     for name in ["postgres", "redis"]:
-        rules = deployments[name]["spec"]["template"]["spec"].get("affinity", {}).get("podAntiAffinity", {})
-        if rules.get("requiredDuringSchedulingIgnoredDuringExecution") or not rules.get("preferredDuringSchedulingIgnoredDuringExecution"):
-            raise ValueError("Apply preferred dependency anti-affinity before injecting")
+        spec = deployments[name]["spec"]["template"]["spec"]
+        constraints = spec.get("topologySpreadConstraints", [])
+        expected = dict(maxSkew=1, topologyKey="kubernetes.io/hostname", whenUnsatisfiable="DoNotSchedule", nodeTaintsPolicy="Honor",
+                        labelSelector=dict(matchExpressions=[dict(key="app.kubernetes.io/name", operator="In", values=["postgres", "redis"])]))
+        if (len(constraints) != 1 or any(constraints[0].get(k) != v for k, v in expected.items()) or
+                constraints[0].get("minDomains", 1) != 1 or constraints[0].get("matchLabelKeys") or
+                spec.get("affinity", {}).get("podAntiAffinity", {}).get("requiredDuringSchedulingIgnoredDuringExecution")):
+            raise ValueError("Apply joint dependency topology spread with single-node recovery before injecting")
     nodes = {x["metadata"]["name"]: x for x in data["items"] if x["kind"] == "Node"}
     for name in [ctx["node"], ctx["other"]]:
         if nodes[name]["metadata"]["labels"].get("node-role") != "app" or nodes[name].get("spec", {}).get("unschedulable"):
