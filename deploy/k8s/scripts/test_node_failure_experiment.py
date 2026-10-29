@@ -49,6 +49,20 @@ def recovered(data):
 
 
 class NodeTests(unittest.TestCase):
+    def test_database_reset_requires_replacement_on_the_failed_worker(self):
+        before = cluster(); after = recovered(before)
+        self.assertEqual(n.database(after, before, context(), "old", "new"),
+                         dict(database_recreated=True, database_fingerprint_match=False))
+        self.assertEqual(n.database(before, before, context(), "old", "old"),
+                         dict(database_recreated=False, database_fingerprint_match=True))
+        with self.assertRaisesRegex(ValueError, "database contents changed"):
+            n.database(before, before, context(), "old", "new")
+        survivor = copy.deepcopy(before)
+        pg = next(p for p in survivor["items"] if p["kind"] == "Pod" and p["metadata"]["name"] == "postgres")
+        pg["spec"]["nodeName"] = "app-2"
+        with self.assertRaisesRegex(ValueError, "surviving PostgreSQL"):
+            n.database(after, survivor, context(), "old", "new")
+
     def test_preflight_requires_matching_nonempty_dependency_revisions(self):
         for revision in ["", "run-2", None]:
             data = cluster()
@@ -106,6 +120,10 @@ class NodeTests(unittest.TestCase):
         raw = fixtures.FailureTests.output() + "\nnode_detected=2026-01-01T00:02:01Z\nendpoint_removed=2026-01-01T00:02:02Z\nrestart_requested=2026-01-01T00:08:00Z\nfinal_state_verified=2026-01-01T00:09:00Z\n"
         result = n.summarize(raw)
         self.assertTrue(result["passed"])
+        self.assertIsNone(result['database_recreated'])
+        database_result = n.summarize(raw + 'database_recreated=true\ndatabase_fingerprint_match=false\n')
+        self.assertTrue(database_result['database_recreated'])
+        self.assertFalse(database_result['database_fingerprint_match'])
         self.assertEqual(result["detection_seconds"], 1)
         self.assertEqual(result["endpoint_seconds"], 2)
         self.assertGreaterEqual(result["mitigation_seconds"], 2)
@@ -221,14 +239,19 @@ class NodeRemoteTests(unittest.TestCase):
         script = (root / "run-node-failure-experiment.sh").read_text()
         common = script[script.index('remote_common='):script.index('stop_possible=false')]
         remote = script.split("remote_script=\"$(cat <<'REMOTE'\n", 1)[1].split("\nREMOTE", 1)[0]
-        for scenario in ["healthy", "data_loss"]:
+        for scenario in ["healthy", "data_loss", "postgres_reset"]:
             with self.subTest(scenario=scenario), tempfile.TemporaryDirectory() as folder:
                 work = pathlib.Path(folder)
                 for file in ["failure_results.py", "node_failure_results.py"]: shutil.copy(root / file, work)
                 for file in ["failure.js", "k6-failure-job.yaml"]: shutil.copy(root.parent / "loadtest" / file, work)
                 (work / "context.json").write_text(json.dumps(context()))
-                (work / "initial.json").write_text(json.dumps(cluster()))
-                (work / "relocated.json").write_text(json.dumps(recovered(cluster())))
+                initial = cluster()
+                if scenario == 'data_loss':
+                    for pod in initial['items'][-2:]:
+                        pod['spec']['nodeName'] = 'app-2' if pod['metadata']['name'] == 'postgres' else 'app-1'
+                    initial['all_pods'] = [copy.deepcopy(p) for p in initial['items'] if p['kind'] == 'Pod']
+                (work / "initial.json").write_text(json.dumps(initial))
+                (work / "relocated.json").write_text(json.dumps(recovered(initial)))
                 (work / "inject").touch()
                 start = dt.datetime.now(dt.timezone.utc) - dt.timedelta(seconds=130)
                 records = []
@@ -245,7 +268,7 @@ echo "$*" >> "$FIXTURE_ROOT/kubectl.log"
 case "$*" in
  *'get pods,deployments,'*) if [[ -f "$FIXTURE_ROOT/ready" ]]; then cat "$FIXTURE_ROOT/relocated.json"; else cat "$FIXTURE_ROOT/initial.json"; fi;;
  *'get pods -A'*) python3 -c 'import json,os; d=json.load(open(os.environ["FIXTURE_ROOT"]+"/initial.json")); print(json.dumps({"items":d["all_pods"]}))';;
- *'exec deployment/postgres'*) if [[ "$SCENARIO" == data_loss && -f "$FIXTURE_ROOT/ready" ]]; then echo changed; else echo fingerprint; fi;;
+ *'exec deployment/postgres'*) if [[ "$SCENARIO" != healthy && -f "$FIXTURE_ROOT/ready" ]]; then echo changed; else echo fingerprint; fi;;
  *'get service beach'*) echo 10.96.0.1;;
  *'logs '*) cat "$FIXTURE_ROOT/raw.json";;
  *'get job '*) echo 1;;
@@ -258,21 +281,31 @@ esac
                 prefix = 'export PATH="$(cygpath -u "$FIXTURE_ROOT")":$PATH; ' if os.name == 'nt' else ''
                 run = subprocess.run([bash, '-c', prefix + 'set -Eeuo pipefail; work_dir="$FIXTURE_ROOT";\n' + common + '\neval "$remote_common"\n' + remote], env=env, text=True, capture_output=True, timeout=20)
                 self.assertEqual(run.returncode, 0, run.stderr)
-                self.assertIn('remote_status=' + ('0' if scenario == 'healthy' else '1'), run.stdout, run.stdout[-1500:] + run.stderr)
+                self.assertIn('remote_status=' + ('1' if scenario == 'data_loss' else '0'), run.stdout, run.stdout[-1500:] + run.stderr)
                 self.assertIn('"metric": "http_reqs"', run.stdout)
                 self.assertIn('delete job', (work / 'kubectl.log').read_text())
                 if scenario == 'data_loss':
                     self.assertIn('ERROR: database contents changed after relocation', run.stdout, run.stdout[-1500:] + run.stderr)
                 else:
                     self.assertNotIn('ERROR: database contents changed after relocation', run.stdout)
-                if scenario == 'healthy':
+                if scenario != 'data_loss':
                     self.assertIn('replacement_ready=', run.stdout)
-                    data = recovered(cluster()); data['items'][3]['status']['conditions'][0]['status'] = 'True'
+                    if scenario == 'postgres_reset':
+                        self.assertIn('database_recreated=true', run.stdout)
+                        self.assertIn('database_fingerprint_match=false', run.stdout)
+                    data = recovered(initial); data['items'][3]['status']['conditions'][0]['status'] = 'True'
                     (work / 'relocated.json').write_text(json.dumps(data))
                     final = script.split("final_script=\"$(cat <<'FINAL'\n", 1)[1].split("\nFINAL", 1)[0]
                     check = subprocess.run([bash, '-c', prefix + 'work_dir="$FIXTURE_ROOT";\n' + common + '\neval "$remote_common"\n' + final], env=env, text=True, capture_output=True, timeout=10)
                     self.assertEqual(check.returncode, 0, check.stderr)
                     self.assertIn('final_state_verified=', check.stdout)
+                    if scenario == 'postgres_reset':
+                        env['SCENARIO'] = 'healthy'
+                        check = subprocess.run([bash, '-c', prefix + 'work_dir="$FIXTURE_ROOT";\n' + common + '\neval "$remote_common"\n' + final.replace('SECONDS + 300', 'SECONDS + 1')],
+                                               env=env, text=True, capture_output=True, timeout=10)
+                        self.assertNotEqual(check.returncode, 0)
+                        self.assertNotIn('final_state_verified=', check.stdout)
+                        self.assertIn('"event": "snapshot"', check.stdout)
 
 
 if __name__ == "__main__":

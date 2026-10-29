@@ -87,9 +87,25 @@ def observe(data, before, ctx):
     return detected, removed, restored
 
 
+def database(data, before, ctx, before_hash, current_hash):
+    def postgres(items):
+        return next(p for p in items if p["kind"] == "Pod" and
+                    p["metadata"]["labels"].get("app.kubernetes.io/name") == "postgres" and not p["metadata"].get("deletionTimestamp"))
+    old, current = postgres(before["items"]), postgres(data["items"])
+    recreated = old["metadata"]["uid"] != current["metadata"]["uid"]
+    if recreated and old["spec"]["nodeName"] != ctx["node"]:
+        raise ValueError("Unexpected replacement of surviving PostgreSQL")
+    matched = before_hash == current_hash
+    if not recreated and not matched:
+        raise ValueError("ERROR: database contents changed after relocation")
+    return dict(database_recreated=recreated, database_fingerprint_match=matched)
+
+
 def summarize(raw):
     result = f.summarize(raw)
     marks = dict(line.split("=", 1) for line in raw.splitlines() if "=" in line and not line.startswith("{"))
+    for key in ("database_recreated", "database_fingerprint_match"):
+        result[key] = marks[key] == "true" if key in marks else None
     times = {k: f.timestamp(marks[k]) for k in ("t0", "node_detected", "endpoint_removed", "replacement_ready", "restart_requested", "final_state_verified") if k in marks}
     complete = len(times) == 6 and times["t0"] <= times["node_detected"] <= times["replacement_ready"] < times["restart_requested"] < times["final_state_verified"] and times["t0"] <= times["endpoint_removed"] <= times["replacement_ready"]
     boundary = f.timestamp(result["recovery_boundary_utc"]) if result["recovery_boundary_utc"] else None
@@ -140,6 +156,10 @@ if __name__ == "__main__":
             raise ValueError("AWS target identity/state mismatch")
     elif mode == "preflight": preflight(load("state.json"), load("context.json"))
     elif mode == "snapshot": print(json.dumps(dict(event="snapshot", time=dt.datetime.now(dt.timezone.utc).isoformat(), data=load("state.json"))), flush=True)
+    elif mode == "database":
+        for key, value in database(load("state.json"), load("before.json"), load("context.json"),
+                                   (directory / "db-before.txt").read_text(), (directory / "db-current.txt").read_text()).items():
+            print(key + "=" + str(value).lower(), flush=True)
     elif mode == "final": final(load("state.json"), load("before.json"), load("context.json"))
     elif mode == "observe":
         flags = observe(load("state.json"), load("before.json"), load("context.json"))

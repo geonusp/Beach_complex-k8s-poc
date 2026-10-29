@@ -11,6 +11,61 @@ import test_failure_experiment as fixtures
 
 
 class RunnerTests(unittest.TestCase):
+    def test_failed_ssm_command_preserves_stdout_and_failure_status(self):
+        root = pathlib.Path(__file__).parent
+        for bucket in ('', 'fixture-bucket'):
+            with self.subTest(bucket=bucket), tempfile.TemporaryDirectory() as folder:
+                work = pathlib.Path(folder)
+                (work / 'aws').write_text('''#!/usr/bin/env bash
+case "$1 $2" in
+ 'ssm send-command') echo command-fixture;;
+ 'ssm get-command-invocation') case "$*" in
+  *StandardErrorContent*) echo remote-error;;
+  *StandardOutputUrl*) echo https://s3.amazonaws.com/fixture-bucket/rollout/stdout;;
+  *StandardOutputContent*) echo snapshot-evidence;;
+  *) echo Failed;; esac;;
+ 's3 cp') printf 'snapshot-evidence'; printf 'x%.0s' {1..25000};;
+esac
+''')
+                (work / 'aws').chmod(0o755)
+                env = fixtures.shell_env(work, work_dir=work.as_posix(),
+                                         SSM_LIB=(root / 'lib/ssm.sh').resolve().as_posix(), BUCKET=bucket)
+                bash = 'C:/Program Files/Git/bin/bash.exe' if os.name == 'nt' else shutil.which('bash')
+                prefix = 'export PATH="$(cygpath -u "$work_dir")":$PATH; ' if os.name == 'nt' else ''
+                run = subprocess.run([bash, '-c', prefix + 'set -Eeuo pipefail; source "$SSM_LIB"; ssm_run i-fixture "echo test" "$BUCKET" rollout'],
+                                     env=env, text=True, capture_output=True, timeout=15)
+                self.assertNotEqual(run.returncode, 0)
+                self.assertIn('snapshot-evidence', run.stdout)
+                if bucket: self.assertGreater(len(run.stdout), 24000)
+                self.assertIn('remote-error', run.stderr)
+                self.assertIn('finished with status Failed', run.stderr)
+
+    def test_ssm_retrieval_failure_cannot_be_masked_by_success_status(self):
+        root = pathlib.Path(__file__).parent
+        with tempfile.TemporaryDirectory() as folder:
+            work = pathlib.Path(folder)
+            (work / 'aws').write_text('''#!/usr/bin/env bash
+case "$1 $2" in
+ 'ssm send-command') echo command-fixture;;
+ 'ssm get-command-invocation') case "$*" in
+  *StandardOutputUrl*) echo https://s3.amazonaws.com/fixture-bucket/rollout/stdout;;
+  *StandardOutputContent*) exit 7;;
+  *) echo Success;; esac;;
+ 's3 cp') exit 7;;
+esac
+''')
+            (work / 'aws').chmod(0o755)
+            for bucket in ('', 'fixture-bucket'):
+                with self.subTest(bucket=bucket):
+                    env = fixtures.shell_env(work, work_dir=work.as_posix(),
+                                             SSM_LIB=(root / 'lib/ssm.sh').resolve().as_posix(), BUCKET=bucket)
+                    bash = 'C:/Program Files/Git/bin/bash.exe' if os.name == 'nt' else shutil.which('bash')
+                    prefix = 'export PATH="$(cygpath -u "$work_dir")":$PATH; ' if os.name == 'nt' else ''
+                    run = subprocess.run([bash, '-c', prefix + 'set -Eeuo pipefail; source "$SSM_LIB"; if ssm_run i-fixture "echo test" "$BUCKET" rollout; then echo masked-failure; fi'],
+                                         env=env, text=True, capture_output=True, timeout=15)
+                    self.assertNotEqual(run.returncode, 0)
+                    self.assertNotIn('masked-failure', run.stdout)
+
     def test_remote_setup_error_is_reported_without_k6_traceback(self):
         with tempfile.TemporaryDirectory() as folder:
             work = pathlib.Path(folder)

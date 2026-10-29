@@ -102,7 +102,7 @@ ssm_run() {
           --command-id "$command_id" \
           --instance-id "$instance_id" \
           --query 'StandardErrorContent' --output text >&2 || true
-        fail "SSM command on $instance_id finished with status $status"
+        break
         ;;
     esac
   done
@@ -115,12 +115,14 @@ ssm_run() {
       || fail "failed to get SSM output URL for $instance_id"
     output_uri="$(printf '%s\n' "$output_url" | sed -E 's#^https?://[^/]+/([^/]+)/#s3://\1/#')"
     [[ "$output_uri" == s3://* ]] || fail "SSM output URL is invalid for $instance_id"
-    aws s3 cp "$output_uri" -
+    aws s3 cp "$output_uri" - || fail "failed to retrieve SSM stdout for $instance_id"
   else
     aws ssm get-command-invocation \
       --command-id "$command_id" \
       --instance-id "$instance_id" \
-      --query 'StandardOutputContent' --output text
+      --query 'StandardOutputContent' --output text \
+      || fail "failed to retrieve SSM stdout for $instance_id"
   fi
 
+  [[ "$status" == Success ]] || fail "SSM command on $instance_id finished with status $status"
 }

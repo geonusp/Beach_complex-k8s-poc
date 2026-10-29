@@ -47,8 +47,10 @@ finish() {
 set -Eeuo pipefail
 touch "$work_dir/abort"
 deadline=$((SECONDS + 300))
+db_baseline="$work_dir/db-before.txt"
+[[ ! -f "$work_dir/db-recovered.txt" ]] || db_baseline="$work_dir/db-recovered.txt"
 while ((SECONDS < deadline)); do
-  if snapshot && python3 "$work_dir/node_failure_results.py" final "$work_dir" && db > "$work_dir/db-final.txt" && cmp -s "$work_dir/db-before.txt" "$work_dir/db-final.txt" && api; then
+  if snapshot && python3 "$work_dir/node_failure_results.py" final "$work_dir" && db > "$work_dir/db-final.txt" && cmp -s "$db_baseline" "$work_dir/db-final.txt" && api; then
     cat "$work_dir/state.json"
     echo "final_state_verified=$(date -u +%Y-%m-%dT%H:%M:%S.%NZ)"
     exit 0
@@ -127,8 +129,13 @@ while ((SECONDS < deadline)); do
   [[ ! -f "$work_dir/abort" ]] || exit 1
   snapshot
   if [[ -f "$work_dir/inject" ]] && python3 "$work_dir/node_failure_results.py" observe "$work_dir"; then
-    db > "$work_dir/db-recovered.txt"
-    cmp "$work_dir/db-before.txt" "$work_dir/db-recovered.txt" || { echo 'ERROR: database contents changed after relocation' >&2; exit 1; }
+    db > "$work_dir/db-current.txt"
+    if [[ "$restored" == false ]]; then
+      python3 "$work_dir/node_failure_results.py" database "$work_dir"
+      cp "$work_dir/db-current.txt" "$work_dir/db-recovered.txt"
+    else
+      cmp "$work_dir/db-recovered.txt" "$work_dir/db-current.txt" || { echo 'ERROR: database contents changed after relocation' >&2; exit 1; }
+    fi
     restored=true
   elif [[ "$restored" == true ]]; then echo 'ERROR: recovery regressed'; exit 1; fi
   if [[ "$(kubectl -n beach get job "$job" -o jsonpath='{.status.succeeded}')" == 1 ]]; then
