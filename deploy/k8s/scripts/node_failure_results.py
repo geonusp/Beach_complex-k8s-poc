@@ -108,6 +108,12 @@ def final(data, before, ctx):
     nodes = {p["metadata"]["name"]: p for p in data["items"] if p["kind"] == "Node"}
     if not all(name in nodes and ready(nodes[name]) and nodes[name]["metadata"]["labels"].get("node-role") == "app" for name in (ctx["node"], ctx["other"])) or not all(ready(p) for p in nodes.values()):
         raise ValueError("Final target/survivor or other nodes not Ready")
+    for name in (ctx["node"], ctx["other"]):
+        spec = nodes[name].get("spec", {})
+        if spec.get("unschedulable") or any(t["key"] in ("node.kubernetes.io/unreachable", "node.kubernetes.io/not-ready", "node.cilium.io/agent-not-ready") for t in spec.get("taints", [])):
+            raise ValueError("Final app worker scheduling recovery incomplete")
+    if any(p["kind"] == "Pod" and p["spec"].get("nodeName") == ctx["node"] and p["metadata"].get("deletionTimestamp") for p in data["items"]):
+        raise ValueError("Final target still has terminating Pods")
     if ctx["ip"] not in [a["address"] for a in nodes[ctx["node"]]["status"]["addresses"] if a["type"] == "InternalIP"]:
         raise ValueError("Restarted target Node IP mismatch")
     trimmed = copy.deepcopy(data)

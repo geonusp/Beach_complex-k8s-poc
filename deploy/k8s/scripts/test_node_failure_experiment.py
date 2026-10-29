@@ -123,6 +123,33 @@ class NodeTests(unittest.TestCase):
             data = copy.deepcopy(after); change(data)
             with self.assertRaises(ValueError): n.final(data, before, context())
 
+    def test_final_waits_for_worker_scheduling_recovery(self):
+        before = cluster(); after = recovered(before)
+        after["items"][3]["status"]["conditions"][0]["status"] = "True"
+        for name in ["app-1", "app-2"]:
+            for spec in [dict(unschedulable=True)] + [dict(taints=[dict(key=key, effect="NoSchedule")]) for key in
+                         ["node.kubernetes.io/unreachable", "node.kubernetes.io/not-ready", "node.cilium.io/agent-not-ready"]]:
+                with self.subTest(node=name, spec=spec):
+                    data = copy.deepcopy(after)
+                    node = next(p for p in data["items"] if p["kind"] == "Node" and p["metadata"]["name"] == name)
+                    node["spec"] = spec
+                    with self.assertRaises(ValueError): n.final(data, before, context())
+                    node["spec"] = dict(unschedulable=False, taints=[])
+                    n.final(data, before, context())
+
+    def test_final_waits_for_terminating_pods_on_restarted_target(self):
+        before = cluster(); after = recovered(before)
+        after["items"][3]["status"]["conditions"][0]["status"] = "True"
+        for original in [p for p in before["items"] if p["kind"] == "Pod" and p["spec"].get("nodeName") == "app-1"]:
+            with self.subTest(pod=original["metadata"]["name"]):
+                old = copy.deepcopy(original)
+                old["metadata"]["deletionTimestamp"] = "2026-01-01T00:05:00Z"
+                data = copy.deepcopy(after)
+                data["items"].append(old)
+                with self.assertRaises(ValueError): n.final(data, before, context())
+                data["items"].pop()
+                n.final(data, before, context())
+
 
 class NodeRunnerTests(unittest.TestCase):
     def test_permission_stop_observation_restart_and_final_verification_failures(self):
