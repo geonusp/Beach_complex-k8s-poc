@@ -1,0 +1,63 @@
+{
+  "passed": true,
+  "t0": "2026-10-29T23:40:51.154159000Z",
+  "replacement_ready": "2026-10-29T23:47:50.974223+00:00",
+  "recovery_boundary_utc": "2026-10-29T23:48:20.974223+00:00",
+  "replacement_seconds": 419.820063829422,
+  "poll_sleep_seconds": 2,
+  "percentile_method": "nearest_rank",
+  "latency_scope": "all_requests",
+  "baseline_valid": true,
+  "phases": {
+    "baseline": {
+      "requests": 835,
+      "failed": 0,
+      "http_5xx": 0,
+      "connection_failures": 0,
+      "dropped_iterations": 0,
+      "error_rate": 0.0,
+      "throughput": 5.002436575480944,
+      "p95_ms": 11.755232,
+      "p99_ms": 22.901795,
+      "duration_samples": 835,
+      "small_p99_sample": false,
+      "samples_complete": true
+    },
+    "failure": {
+      "requests": 2249,
+      "failed": 181,
+      "http_5xx": 112,
+      "connection_failures": 69,
+      "dropped_iterations": 0,
+      "error_rate": 0.08048021342819031,
+      "throughput": 4.9997769793853655,
+      "p95_ms": 22.012165,
+      "p99_ms": 5000.251653,
+      "duration_samples": 2249,
+      "small_p99_sample": false,
+      "samples_complete": true
+    },
+    "recovery": {
+      "requests": 2043,
+      "failed": 0,
+      "http_5xx": 0,
+      "connection_failures": 0,
+      "dropped_iterations": 0,
+      "error_rate": 0.0,
+      "throughput": 4.999441664569555,
+      "p95_ms": 5.228202,
+      "p99_ms": 15.34349,
+      "duration_samples": 2043,
+      "small_p99_sample": false,
+      "samples_complete": true
+    }
+  },
+  "database_recreated": true,
+  "database_fingerprint_match": false,
+  "detection_seconds": 54.41840600967407,
+  "endpoint_seconds": 54.418752908706665,
+  "api_stable_utc": "2026-10-29T23:42:15.572912+00:00",
+  "mitigation_seconds": 84.41875290870667,
+  "recovery_seconds": 449.820063829422,
+  "clock_caveat": "t0/restart: operator clock; node observations: CP; request samples: obs-1; offsets unverified"
+}

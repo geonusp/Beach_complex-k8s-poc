@@ -571,6 +571,28 @@ test_dependencies_are_applied_on_the_control_plane() {
   cat > "$bin_dir/kubectl" <<'EOF'
 #!/usr/bin/env bash
 printf '%s\n' "$*" >> "$KUBECTL_LOG"
+case "$*" in
+  'apply -k /tmp/beach-dependencies')
+    pg_revision="$(awk '/dependency-revision:/ {print $2}' /tmp/beach-dependencies/postgres.yaml)"
+    redis_revision="$(awk '/dependency-revision:/ {print $2}' /tmp/beach-dependencies/redis.yaml)"
+    [[ -n "$pg_revision" && "$pg_revision" != initial && "$pg_revision" == "$redis_revision" ]] \
+      || { echo 'dependencies do not share a fresh rollout revision' >&2; exit 1; }
+    printf '%s\n' "$pg_revision" >> "$KUBECTL_LOG.revision";;
+  *'get pods '*'-o name'*)
+    if [[ "${DEPENDENCY_SCENARIO:-healthy}" == termination_error ]]; then echo pod/postgres-old; fi;;
+  *'wait --for=delete'*) exit 1;;
+  *'get deployment/'*'readyReplicas'*) echo '1 1';;
+  *'get deployment/'*'revision'*) echo 2;;
+  *'get replicasets'*) echo latest;;
+  *'get pods -l app.kubernetes.io/name=postgres,'*) echo app-1;;
+  *'get pods -l app.kubernetes.io/name=redis,'*)
+    case "${DEPENDENCY_SCENARIO:-healthy}" in
+      colocated) echo app-1;;
+      query_error) exit 1;;
+      *) echo app-2;;
+    esac;;
+  *'get node '*) echo app;;
+esac
 EOF
   chmod +x "$bin_dir/kubectl"
 
@@ -585,6 +607,23 @@ EOF
     || fail 'PostgreSQL rollout was not verified'
   grep -Fxq -- '-n beach rollout status deployment/redis --timeout=300s' "$kubectl_log" \
     || fail 'Redis rollout was not verified'
+  local first_revision
+  first_revision="$(cat "$kubectl_log.revision")"
+  PATH="$bin_dir:$PATH" AWS_PARAMETERS_FILE="$parameters_file" \
+    bash "$script_dir/deploy-dependencies.sh" >/dev/null
+  decode_remote_script "$parameters_file" "$remote_script"
+  PATH="$bin_dir:$PATH" KUBECTL_LOG="$test_dir/dependency-redeploy.log" bash "$remote_script"
+  [[ "$(cat "$test_dir/dependency-redeploy.log.revision")" != "$first_revision" ]] \
+    || fail 'dependency redeployment reused an old rollout revision'
+  local scenario
+  for scenario in colocated query_error termination_error; do
+    if PATH="$bin_dir:$PATH" KUBECTL_LOG="$test_dir/$scenario.log" DEPENDENCY_SCENARIO="$scenario" \
+      bash "$remote_script" >"$test_dir/dependency-$scenario.log" 2>&1; then
+      fail "dependency verification accepted $scenario"
+    fi
+  done
+  grep -Fq 'dependencies must be on distinct app workers' "$test_dir/dependency-colocated.log" \
+    || fail 'dependency placement failure was not reported'
 }
 
 test_beach_deployment_creates_runtime_secret_and_rolls_out() {
@@ -602,13 +641,39 @@ test_beach_deployment_creates_runtime_secret_and_rolls_out() {
   cat > "$bin_dir/kubectl" <<'EOF'
 #!/usr/bin/env bash
 printf '%s\n' "$*" >> "$KUBECTL_LOG"
+case "$*" in
+  *'rollout status'*) [[ "$SCENARIO" != rollout ]] ;;
+  *'get deployment/'*'readyReplicas'*) printf '2' ;;
+  *'get deployment/'*'revision'*) printf '7' ;;
+  *'get replicasets'*)
+    [[ "$*" == *"revision=='7'"* ]] || exit 1
+    [[ "$SCENARIO" == missing ]] || printf 'current-hash' ;;
+  *'get pods'*'custom-columns'*)
+    if [[ "$SCENARIO" == skew && "$*" == *'pod-template-hash=current-hash'* ]]; then
+      printf 'app-1\napp-1\n'
+    else
+      printf 'app-1\napp-2\n'
+    fi ;;
+  *'get endpoints'*) printf '10.244.1.1 10.244.2.1' ;;
+esac
 EOF
   chmod +x "$bin_dir/kubectl"
 
   PATH="$bin_dir:$PATH" AWS_PARAMETERS_FILE="$parameters_file" \
     bash "$script_dir/deploy-beach.sh" >/dev/null
   decode_remote_script "$parameters_file" "$remote_script"
-  PATH="$bin_dir:$PATH" KUBECTL_LOG="$kubectl_log" bash "$remote_script"
+  local scenario status output="$test_dir/beach-output"
+  for scenario in skew missing rollout normal; do
+    status=0
+    PATH="$bin_dir:$PATH" KUBECTL_LOG="$kubectl_log" SCENARIO="$scenario" \
+      bash "$remote_script" > "$output" 2>&1 || status=$?
+    if [[ "$scenario" == normal ]]; then
+      [[ "$status" == 0 ]] || fail "normal placement failed: $(cat "$output")"
+      grep -Fq 'Beach deployment verification completed' "$output" || fail 'existing verifier was not run'
+    else
+      [[ "$status" != 0 ]] || fail "$scenario placement failure was ignored"
+    fi
+  done
 
   grep -Fq -- 'create secret generic beach-runtime --namespace beach' "$kubectl_log" \
     || fail 'Beach runtime Secret was not generated'

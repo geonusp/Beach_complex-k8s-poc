@@ -35,18 +35,22 @@ spec:
         app.kubernetes.io/name: postgres
         app.kubernetes.io/component: database
         app.kubernetes.io/part-of: beach-complex
+        dependency-revision: initial
     spec:
       nodeSelector:
         node-role: app
-      affinity:
-        podAntiAffinity:
-          preferredDuringSchedulingIgnoredDuringExecution:
-            - weight: 100
-              podAffinityTerm:
-                labelSelector:
-                  matchLabels:
-                    app.kubernetes.io/name: redis
-                topologyKey: kubernetes.io/hostname
+      topologySpreadConstraints:
+        - maxSkew: 1
+          topologyKey: kubernetes.io/hostname
+          whenUnsatisfiable: DoNotSchedule
+          nodeTaintsPolicy: Honor
+          matchLabelKeys:
+            - dependency-revision
+          labelSelector:
+            matchExpressions:
+              - key: app.kubernetes.io/name
+                operator: In
+                values: [postgres, redis]
       containers:
         - name: postgres
           image: postgis/postgis:16-3.5-alpine

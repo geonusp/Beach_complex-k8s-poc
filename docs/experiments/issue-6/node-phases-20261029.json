@@ -1,0 +1,61 @@
+{
+  "passed": true,
+  "t0": "2026-10-29T21:38:37.918555400Z",
+  "replacement_ready": "2026-10-29T21:45:35.182754+00:00",
+  "recovery_boundary_utc": "2026-10-29T21:46:05.182754+00:00",
+  "replacement_seconds": 417.2641990184784,
+  "poll_sleep_seconds": 2,
+  "percentile_method": "nearest_rank",
+  "latency_scope": "all_requests",
+  "baseline_valid": true,
+  "phases": {
+    "baseline": {
+      "requests": 728,
+      "failed": 0,
+      "http_5xx": 0,
+      "connection_failures": 0,
+      "dropped_iterations": 0,
+      "error_rate": 0.0,
+      "throughput": 5.001686933369188,
+      "p95_ms": 12.503821,
+      "p99_ms": 25.630115,
+      "duration_samples": 728,
+      "small_p99_sample": false,
+      "samples_complete": true
+    },
+    "failure": {
+      "requests": 2237,
+      "failed": 49,
+      "http_5xx": 0,
+      "connection_failures": 49,
+      "dropped_iterations": 0,
+      "error_rate": 0.021904336164506034,
+      "throughput": 5.0015181293497175,
+      "p95_ms": 7.335906,
+      "p99_ms": 22.803009,
+      "duration_samples": 2237,
+      "small_p99_sample": false,
+      "samples_complete": true
+    },
+    "recovery": {
+      "requests": 2175,
+      "failed": 0,
+      "http_5xx": 0,
+      "connection_failures": 0,
+      "dropped_iterations": 0,
+      "error_rate": 0.0,
+      "throughput": 4.99804252523373,
+      "p95_ms": 10.34252,
+      "p99_ms": 23.718724,
+      "duration_samples": 2175,
+      "small_p99_sample": false,
+      "samples_complete": true
+    }
+  },
+  "detection_seconds": 54.075660943984985,
+  "endpoint_seconds": 54.07595896720886,
+  "api_stable_utc": "2026-10-29T21:45:24.994514+00:00",
+  "mitigation_seconds": 407.07595896720886,
+  "recovery_seconds": 447.2641990184784,
+  "clock_caveat": "t0/restart: operator clock; node observations: CP; request samples: obs-1; offsets unverified"
+}

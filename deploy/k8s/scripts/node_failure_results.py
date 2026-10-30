@@ -31,10 +31,18 @@ def preflight(data, ctx):
     spread = deployments["beach"]["spec"]["template"]["spec"]["topologySpreadConstraints"]
     if not any(s.get("nodeTaintsPolicy") == "Honor" for s in spread):
         raise ValueError("Apply Beach nodeTaintsPolicy Honor before injecting")
+    dependency_revision = deployments["postgres"]["spec"]["template"].get("metadata", {}).get("labels", {}).get("dependency-revision")
+    if not dependency_revision or deployments["redis"]["spec"]["template"].get("metadata", {}).get("labels", {}).get("dependency-revision") != dependency_revision:
+        raise ValueError("Apply matching nonempty dependency revisions before injecting")
     for name in ["postgres", "redis"]:
-        rules = deployments[name]["spec"]["template"]["spec"].get("affinity", {}).get("podAntiAffinity", {})
-        if rules.get("requiredDuringSchedulingIgnoredDuringExecution") or not rules.get("preferredDuringSchedulingIgnoredDuringExecution"):
-            raise ValueError("Apply preferred dependency anti-affinity before injecting")
+        spec = deployments[name]["spec"]["template"]["spec"]
+        constraints = spec.get("topologySpreadConstraints", [])
+        expected = dict(maxSkew=1, topologyKey="kubernetes.io/hostname", whenUnsatisfiable="DoNotSchedule", nodeTaintsPolicy="Honor", matchLabelKeys=["dependency-revision"],
+                        labelSelector=dict(matchExpressions=[dict(key="app.kubernetes.io/name", operator="In", values=["postgres", "redis"])]))
+        if (len(constraints) != 1 or any(constraints[0].get(k) != v for k, v in expected.items()) or
+                constraints[0].get("minDomains", 1) != 1 or
+                spec.get("affinity", {}).get("podAntiAffinity", {}).get("requiredDuringSchedulingIgnoredDuringExecution")):
+            raise ValueError("Apply joint dependency topology spread with single-node recovery before injecting")
     nodes = {x["metadata"]["name"]: x for x in data["items"] if x["kind"] == "Node"}
     for name in [ctx["node"], ctx["other"]]:
         if nodes[name]["metadata"]["labels"].get("node-role") != "app" or nodes[name].get("spec", {}).get("unschedulable"):
@@ -79,9 +87,25 @@ def observe(data, before, ctx):
     return detected, removed, restored
 
 
+def database(data, before, ctx, before_hash, current_hash):
+    def postgres(items):
+        return next(p for p in items if p["kind"] == "Pod" and
+                    p["metadata"]["labels"].get("app.kubernetes.io/name") == "postgres" and not p["metadata"].get("deletionTimestamp"))
+    old, current = postgres(before["items"]), postgres(data["items"])
+    recreated = old["metadata"]["uid"] != current["metadata"]["uid"]
+    if recreated and old["spec"]["nodeName"] != ctx["node"]:
+        raise ValueError("Unexpected replacement of surviving PostgreSQL")
+    matched = before_hash == current_hash
+    if not recreated and not matched:
+        raise ValueError("ERROR: database contents changed after relocation")
+    return dict(database_recreated=recreated, database_fingerprint_match=matched)
+
+
 def summarize(raw):
     result = f.summarize(raw)
     marks = dict(line.split("=", 1) for line in raw.splitlines() if "=" in line and not line.startswith("{"))
+    for key in ("database_recreated", "database_fingerprint_match"):
+        result[key] = marks[key] == "true" if key in marks else None
     times = {k: f.timestamp(marks[k]) for k in ("t0", "node_detected", "endpoint_removed", "replacement_ready", "restart_requested", "final_state_verified") if k in marks}
     complete = len(times) == 6 and times["t0"] <= times["node_detected"] <= times["replacement_ready"] < times["restart_requested"] < times["final_state_verified"] and times["t0"] <= times["endpoint_removed"] <= times["replacement_ready"]
     boundary = f.timestamp(result["recovery_boundary_utc"]) if result["recovery_boundary_utc"] else None
@@ -100,6 +124,12 @@ def final(data, before, ctx):
     nodes = {p["metadata"]["name"]: p for p in data["items"] if p["kind"] == "Node"}
     if not all(name in nodes and ready(nodes[name]) and nodes[name]["metadata"]["labels"].get("node-role") == "app" for name in (ctx["node"], ctx["other"])) or not all(ready(p) for p in nodes.values()):
         raise ValueError("Final target/survivor or other nodes not Ready")
+    for name in (ctx["node"], ctx["other"]):
+        spec = nodes[name].get("spec", {})
+        if spec.get("unschedulable") or any(t["key"] in ("node.kubernetes.io/unreachable", "node.kubernetes.io/not-ready", "node.cilium.io/agent-not-ready") for t in spec.get("taints", [])):
+            raise ValueError("Final app worker scheduling recovery incomplete")
+    if any(p["kind"] == "Pod" and p["spec"].get("nodeName") == ctx["node"] and p["metadata"].get("deletionTimestamp") for p in data["items"]):
+        raise ValueError("Final target still has terminating Pods")
     if ctx["ip"] not in [a["address"] for a in nodes[ctx["node"]]["status"]["addresses"] if a["type"] == "InternalIP"]:
         raise ValueError("Restarted target Node IP mismatch")
     trimmed = copy.deepcopy(data)
@@ -126,6 +156,10 @@ if __name__ == "__main__":
             raise ValueError("AWS target identity/state mismatch")
     elif mode == "preflight": preflight(load("state.json"), load("context.json"))
     elif mode == "snapshot": print(json.dumps(dict(event="snapshot", time=dt.datetime.now(dt.timezone.utc).isoformat(), data=load("state.json"))), flush=True)
+    elif mode == "database":
+        for key, value in database(load("state.json"), load("before.json"), load("context.json"),
+                                   (directory / "db-before.txt").read_text(), (directory / "db-current.txt").read_text()).items():
+            print(key + "=" + str(value).lower(), flush=True)
     elif mode == "final": final(load("state.json"), load("before.json"), load("context.json"))
     elif mode == "observe":
         flags = observe(load("state.json"), load("before.json"), load("context.json"))

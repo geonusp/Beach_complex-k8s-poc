@@ -11,8 +11,8 @@ export const options = {
       rate: Number(__ENV.K6_RATE || 5),
       timeUnit: '1s',
       duration: __ENV.BEACH_K6_DURATION || '420s',
-      preAllocatedVUs: 2,
-      maxVUs: 10,
+      preAllocatedVUs: 30,
+      maxVUs: 30,
     },
   },
 };
