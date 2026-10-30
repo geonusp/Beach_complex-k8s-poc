@@ -2,7 +2,7 @@
 
 ## 범위와 상태
 
-Related #6. Pod 장애·공통 측정 단계다. 개발 클러스터에서 운영자가 Beach Pod 1개를 삭제하는 실험을 실행했고, 원본 재집계와 최종 상태를 검증했다. Node 장애 실험은 후속 PR 2이며 이슈 #6 전체 완료를 뜻하지 않는다.
+Related #6. Pod 장애·공통 측정 단계다. 개발 클러스터에서 운영자가 Beach Pod 1개를 삭제하는 실험을 실행했고, 원본 재집계와 최종 상태를 검증했다. 이 문서는 Pod 회차의 결과다. Node 장애·다른 Worker 재배치·최종 복구까지 확인한 최신 결과는 [Node 결과](NODE_RESULTS_20261030.md)에 기록했다.
 
 검증 코드: `b6e9b9cc8c31a2d0dc20f805a2c9bbc8b7915dd1`. 최초 성공 실행 이후 남아 있는 ConfigMap과 충돌하는 반복 실행 오류를 수정한 버전이다.
 
@@ -107,3 +107,7 @@ S3 `rollout/issue-6/<label>/`는 임시 전송 위치이며 Terraform destroy �
 - [Pod 강제 삭제](https://kubernetes.io/docs/concepts/workloads/pods/pod-lifecycle/#forced-pod-termination)
 - [EndpointSlice conditions](https://kubernetes.io/docs/concepts/services-networking/endpoint-slices/#conditions)
 - [k6 JSON output](https://grafana.com/docs/k6/latest/results-output/real-time/json/)
+
+## Node 후속 실험 완료 증거
+
+2026-10-29 UTC 운영자 실행 회차 `node-20261029T233550Z-45508`에서 Node 감지·다른 Worker 재배치·사용자 영향 측정·동일 EC2 최종 복구를 확인했다. 위 본문의 PR 2 미검증 표현은 Pod 실험 당시의 범위다. 현재 #6 결과는 [최신 Node 결과](NODE_RESULTS_20261030.md)를 함께 참조한다. 장애 구간 요청 실패 181/2,249건, PostgreSQL 비영속 재생성과 fingerprint 변경을 기록했다.
