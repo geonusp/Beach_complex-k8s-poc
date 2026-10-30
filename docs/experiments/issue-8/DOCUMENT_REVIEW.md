@@ -1,5 +1,7 @@
 # #8 문서 정합성 검토 기록
 
+> 이 문서는 2026-10-30 README 갱신 전의 검토 이력이다. 최신 의존성 배치와 Node 장애 실측 결과는 [루트 README](../../../README.md)와 [Node 결과](../issue-6/NODE_RESULTS_20261030.md)를 기준으로 확인한다.
+
 ## 범위와 방법
 
 기준 커밋 `8c3710d0` 이후의 문서 정정이다. 루트 README·docs·deploy/k8s의 Markdown 27개와 원래 체크아웃의 관련 tempdocs 33개를 목록화했다. 이 기록 자체는 추가 문서다.

@@ -20,7 +20,8 @@
 | #3 Rolling Update | 1 req/s, 전체 390초, 389건 HTTP 200, dropped iteration 1건 | 롤아웃 성공. 기본·조정 설정 비교는 범위 제외.[상세·공개 원본](../issue-3/README.md) |
 | #3 Redis readiness | Redis 1→0→1, ready endpoint 2→0→2, Pod 재시작 없음 | endpoint 제외·재포함 관측. 요청 실패율 미측정.[상세·공개 원본](../issue-3/readiness-endpoint/README.md) |
 | #5 관측성 | 5 req/s·300초, 1,501건·실패 0, Prometheus target 26개 up | 단일 회차 지표 조회·Grafana 화면 보존.[상세·증거](../issue-5/README.md) |
-| #6 Pod 장애 | 5 req/s·420초, 2,101건·실패 0, 새 Pod Ready까지 64.56초 | Pod 1개 삭제 후 복구 관측. 64.56초는 서비스 중단 시간이 아님. Node 실측은 후속.[상세](../issue-6/README.md) |
+| #6 Pod 장애 | 5 req/s·420초, 2,101건·실패 0, 새 Pod Ready까지 64.56초 | Pod 1개 삭제 후 복구 관측. 64.56초는 서비스 중단 시간이 아님. [상세](../issue-6/README.md) |
+| #6 Node 장애 | 5 req/s·구간 합 약 1,025초, 5,127건 중 장애·안정 확인 구간 2,249건에서 181건 실패(8.048%), 감지 54.42초·대체 Pod Ready 419.82초 | PostgreSQL 배치 Node 1회 실측·최종 노드 복구 확인. DB 재생성·데이터 비보존, 연속 중단 시간 아님.[상세](../issue-6/NODE_RESULTS_20261030.md) |
 | #4 HPA | CPU request 100m, 120 req/s 설정·600초, 71,999건·실패 0, 실측 120.013 req/s, Ready 2→4→2 | extreme 회차 확장·축소 관측. 40 req/s는 첫 회차 확장·반복 미확장으로 반복 재현 미확인, 미통과 판정 유지.[상세](../issue-4/README.md) |
 
 ## 지연시간과 집계 범위
@@ -40,7 +41,7 @@
 | --- | --- |
 | #3 | 상세 문서에 원본 JSON·SSM 출력과 SHA-256 보존. 이미지 `latest` 및 digest 미수집 한계는 회차별 기록 참조 |
 | #5 | k6 요약·관측 검증 출력·Grafana PNG 공개. 실험 당시 CPU request는 250m으로 현재 100m과 다름 |
-| #6 | 집계 사본은 저장소에 있으나 전체 원본은 로컬 `deploy/k8s/loadtest/results/issue-6/`에만 보관. 검증 코드 `b6e9b9cc8c31a2d0dc20f805a2c9bbc8b7915dd1` |
+| #6 | Pod·Node 집계 사본은 저장소에 있으나 전체 원본은 로컬 `deploy/k8s/loadtest/results/issue-6/`에만 보관. Pod 검증 코드 `b6e9b9cc8c31a2d0dc20f805a2c9bbc8b7915dd1`, Node 최종 회차 실행 코드 `95900eded0d531c15d1953a0ce1adc1805d94ffe` |
 | #4 | 전체 원본은 로컬 `deploy/k8s/loadtest/results/issue-4/`에만 보관. extreme 재집계 기준 `b84b455b`. 초기 회차는 미커밋 변경 상태여서 상세 기록의 실행 조건을 함께 확인 |
 
 외부 검토자는 #4·#6 전체 원본을 Git에서 내려받을 수 없다. 로컬 경로·해시·집계 사본은 외부 접근 권한을 제공하지 않는다. 실행 코드와 재집계 코드 기준을 동일한 것으로 취급하지 않는다.
@@ -53,12 +54,12 @@
 
 | 기준 | 현재 제공한 자료·남은 검증 |
 | --- | --- |
-| 프로젝트 목적·아키텍처·선택 근거 | 루트 README, 그림, 실행 환경 ADR. Terraform 인스턴스·AZ는 예시 |
+| 프로젝트 목적·아키텍처·선택 근거 | 루트 README, 그림, 실행 환경 ADR. 인스턴스·AZ는 2026-10-30 AWS 콘솔에서 운영자 확인 |
 | 생성·삭제 절차와 새 환경 재현 | 가이드를 현재 스크립트 단계와 대조. 새 환경에서 전체 재현은 미검증 |
-| Probe·Rolling Update·HPA·장애 결과 | 위 표와 상세 문서. readiness 요청 실패율 미측정, Node 실측은 후속 |
+| Probe·Rolling Update·HPA·장애 결과 | 위 표와 상세 문서. Redis 단독 장애 요청 실패율 미측정, PostgreSQL 배치 Node 장애 1회 실측·데이터 비보존 |
 | 관측 증거·k6·지연 비교 | #5 검증 출력·화면과 회차별 지표. #4·#6 전체 원본은 외부 접근 제한 |
 | 과장 없는 성능·HA 표현 | 단일 Control Plane, 내부 경로·단기 실험, 고정 replica 대조 없음. 대규모 production 성능·클러스터 HA 미검증 |
 | 주요 이슈·관련 코드 연결 | #4 결과의 PR #33·#34 링크와 회차별 코드 기준, #6 검증 코드. 모든 회차의 이미지 digest·실행 diff가 확보된 것은 아님 |
-| Hubble·확장 로드맵 | #7 NetworkPolicy/Hubble, #6 Node 실측, #18 분석 데모, #13 노드 자동확장은 후속. Cilium 설치를 해당 실험 완료로 취급하지 않음 |
+| Hubble·확장 로드맵 | #7 NetworkPolicy/Hubble, #18 분석 데모, #13 노드 자동확장은 후속. Cilium 설치를 해당 실험 완료로 취급하지 않음 |
 
 kind 로컬 단계는 초기 계획이며 저장소에서 실행 근거를 확인하지 못했다. PDF 페이지와 GitHub 화면 렌더링도 별도 검증이 필요하다.

@@ -29,7 +29,8 @@ PoC용 PostgreSQL과 Redis를 **Kubernetes 클러스터의 `beach` Namespace 안
 - PostgreSQL: `Deployment` + `ClusterIP Service` 이름 `postgres`
 - Redis: `Deployment` + `ClusterIP Service` 이름 `redis`
 - Beach 앱은 각각 `postgres:5432`, `redis:6379`로 접근한다.
-- 두 의존성은 서로 다른 App Worker 배치를 선호하는 `preferredDuringSchedulingIgnoredDuringExecution` Pod anti-affinity를 사용한다. 서로 다른 노드 배치를 보장하지 않으며 Node 장애 시 재배치·복구 동작은 미검증이다.
+- 두 의존성은 PostgreSQL·Redis를 함께 집계하는 `topologySpreadConstraints`(`maxSkew: 1`, `whenUnsatisfiable: DoNotSchedule`, `nodeTaintsPolicy: Honor`, `matchLabelKeys: [dependency-revision]`)를 사용한다. `minDomains`는 지정하지 않아 장애로 적격 App Worker가 하나만 남으면 함께 배치할 수 있다. 노드 복귀 후 실행 중인 Pod를 자동 재분산하지 않는다.
+- PostgreSQL 배치 Node 장애 1회에서 다른 Worker 재배치와 최종 노드 복구를 확인했다. PostgreSQL은 재생성되어 데이터가 보존되지 않았다. [회차 결과와 검증 한계](../experiments/issue-6/NODE_RESULTS_20261030.md)를 확인한다.
 - Control Plane에는 워크로드를 배치하지 않는다.
 - `obs-1`은 관측 워크로드 전용으로 유지한다.
 - 영속 볼륨은 사용하지 않는다. 클러스터 재생성·리소스 삭제 시 데이터도 사라지는 검증 전용 구성이다.
@@ -101,7 +102,7 @@ PoC용 PostgreSQL과 Redis를 **Kubernetes 클러스터의 `beach` Namespace 안
 ### 공식 문서 링크
 
 - [Kubernetes nodeSelector](https://kubernetes.io/docs/concepts/scheduling-eviction/assign-pod-node/)
-- [Kubernetes pod anti-affinity](https://kubernetes.io/docs/concepts/scheduling-eviction/assign-pod-node/#inter-pod-affinity-and-anti-affinity)
+- [Kubernetes Pod topology spread constraints](https://kubernetes.io/docs/concepts/scheduling-eviction/topology-spread-constraints/)
 - [Kubernetes Service](https://kubernetes.io/docs/concepts/services-networking/service/)
 
 ### 관련 문서
